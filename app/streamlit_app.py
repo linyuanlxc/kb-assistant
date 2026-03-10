@@ -5,8 +5,7 @@ from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.runnables import RunnableBranch, RunnablePassthrough
 import sys
-sys.path.append("notebook/C3 搭建知识库") # 将父目录放入系统路径中
-from qwen_embedding import QwenEmbeddings
+from embeddings.qwen_embedding import QwenEmbeddings
 from langchain_community.vectorstores import Chroma
 
 def get_retriever():
@@ -28,7 +27,7 @@ def get_qa_history_chain():
     retriever = get_retriever()
     # llm = ChatOpenAI(model_name="gpt-4o", temperature=0,api_key="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")
     llm = ChatOpenAI(
-        api_key="sk-818b586462be4a57b78e653e5250c850",  # 阿里云百炼平台获取：https://dashscope.aliyun.com/
+        api_key=st.secrets.get("QWEN_API_KEY"),  # 阿里云百炼平台获取：https://dashscope.aliyun.com/
         base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
         model_name = "qwen3.5-flash",  # 阿里云百炼平台提供的模型名称，具体可参考：https://help.aliyun.com/document_detail/253968.html
     )

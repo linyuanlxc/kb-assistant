@@ -2,10 +2,11 @@ from typing import List
 from langchain_core.embeddings import Embeddings
 import os
 from openai import OpenAI
+import streamlit as st
 
 class QwenEmbeddings(Embeddings):
     def __init__(self):
-        api_key="sk-818b586462be4a57b78e653e5250c850"
+        api_key=st.secrets.get("QWEN_API_KEY")
         if not api_key:
             raise ValueError("请提供千问API密钥")
         self.client = OpenAI(
