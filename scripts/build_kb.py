@@ -4,6 +4,12 @@ import shutil
 from pathlib import Path
 from uuid import uuid4
 
+from pathlib import Path
+
+ROOT_DIR = Path(__file__).resolve().parents[1]
+if str(ROOT_DIR) not in sys.path:
+    sys.path.append(str(ROOT_DIR))
+
 from langchain_chroma import Chroma
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_community.document_loaders import (
@@ -15,8 +21,8 @@ from langchain_community.document_loaders import (
 from embeddings.qwen_embedding import QwenEmbeddings
 
 # ====== 配置区 ======
-SOURCE_DIR = "kb_source"                       # 原始知识文件目录
-PERSIST_DIRECTORY = "data_base/vector_db/chroma"
+SOURCE_DIR = ROOT_DIR / "kb_source"                       # 原始知识文件目录
+PERSIST_DIRECTORY = ROOT_DIR / "data_base" / "vector_db" / "chroma"
 COLLECTION_NAME = "default_kb"
 RESET_DB = True                               # True = 每次执行都重建整个库；False = 增量添加
 
@@ -172,7 +178,7 @@ def build_vector_db():
     vector_store = Chroma(
         collection_name=COLLECTION_NAME,
         embedding_function=embedding,
-        persist_directory=PERSIST_DIRECTORY,
+        persist_directory=str(PERSIST_DIRECTORY),
     )
 
     # 6) 写入向量库

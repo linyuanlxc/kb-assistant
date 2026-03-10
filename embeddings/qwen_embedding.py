@@ -25,10 +25,10 @@ class QwenEmbeddings(Embeddings):
         """
 
         result = []
-        for i in range(0, len(texts), 64):
+        for i in range(0, len(texts), 10):
             embeddings = self.client.embeddings.create(
                 model="text-embedding-v3",
-                input=texts[i:i+64],
+                input=texts[i:i+10],
                 dimensions=1024
             )
             result.extend([embeddings.embedding for embeddings in embeddings.data])
