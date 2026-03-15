@@ -40,6 +40,7 @@ def get_retriever():
 
         # 加载数据库
         vectordb = Chroma(
+            collection_name="default_kb",
             persist_directory=str(persist_directory),
             embedding_function=embedding
         )
