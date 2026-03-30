@@ -1,2 +1,16 @@
-__pycache__/
+﻿__pycache__/
 .streamlit/
+
+# 运行时产物
+runtime/
+runtime/uploads/
+
+# Python 临时文件
+*.pyc
+*.pyo
+*.pyd
+
+# 本地环境
+.env
+.venv/
+

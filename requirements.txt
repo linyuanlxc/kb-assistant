@@ -1,11 +1,9 @@
-langchain==0.3.0
+﻿langchain==0.3.0
 langchain-community==0.3.0
 langchain-text-splitters==0.3.0
 langchain-core==0.3.0
 langchain-openai==0.2.0
-langchain-chroma==0.1.4
 python-dotenv==1.0.1
-spark-ai-python==0.4.5
 zhipuai==2.1.5.20250106
 qianfan==0.4.12.3
 unstructured==0.16.23
@@ -14,3 +12,10 @@ markdown==3.7
 streamlit==1.43.0
 jieba==0.42.1
 pydantic==2.10.6
+openai>=1.55.0
+qdrant-client==1.11.1
+neo4j==5.25.0
+rank-bm25==0.2.2
+pyyaml==6.0.2
+sentence-transformers==3.2.1
+Pillow==11.0.0

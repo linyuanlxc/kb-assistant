@@ -1,0 +1,9 @@
+﻿source_dir: kb_source
+index_dir: data_base
+runtime_dir: runtime
+model_cache_dir: runtime/model_cache
+log_dir: runtime/logs
+log_file: runtime/logs/app.log
+text_collection: kb_text_chunks
+image_collection: kb_image_assets
+parent_collection: kb_parent_docs

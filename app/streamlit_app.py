@@ -1,226 +1,151 @@
-import streamlit as st
-from langchain_openai import ChatOpenAI
-import os
-from langchain_core.output_parsers import StrOutputParser
-from langchain_core.prompts import ChatPromptTemplate
-from langchain_core.runnables import RunnableBranch, RunnablePassthrough
+﻿"""KB Assistant V2 的 Streamlit 应用入口。
+
+功能说明：
+- 混合检索（Qdrant + BM25 + LightRAG）
+- 支持图片上传的多模态检索
+- 流式回答生成
+- 带检索诊断信息的调试面板
+"""
+
+from __future__ import annotations
+
 import sys
 from pathlib import Path
-import logging
-import time
 
-# =========================
-# 日志配置
-# =========================
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s | %(levelname)s | %(name)s | %(message)s",
-)
-logger = logging.getLogger("kb_assistant")
+import streamlit as st
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
 if str(ROOT_DIR) not in sys.path:
     sys.path.append(str(ROOT_DIR))
 
-from embeddings.qwen_embedding import QwenEmbeddings
-from langchain_community.vectorstores import Chroma
+from core.config.settings import load_settings
+from core.indexing.bm25_index import BM25Indexer
+from core.indexing.vector_store import QdrantVectorStoreAdapter
+from core.observability.logging_utils import setup_logging
+from core.orchestration.pipeline import RAGPipeline, RetrievalOrchestrator
+from core.providers.model_provider import ModelRegistry
+from core.retrieval.graph_retriever import LightRAGGraphEngine
+from core.types import RetrieverRequest, SearchMode
 
 
-def get_retriever():
-    start = time.perf_counter()
-    try:
-        logger.info("开始初始化 retriever")
+def _bootstrap_pipeline() -> RAGPipeline:
+    """初始化运行时依赖，并返回可直接使用的 RAG 流水线。"""
+    settings = load_settings()
+    registry = ModelRegistry(settings.model_registry_path)
 
-        # 定义 Embeddings
-        embedding = QwenEmbeddings()
+    # 先构建底层检索组件，再统一交给编排层组装，避免 UI 层直接接触细节实现。
+    vector_store = QdrantVectorStoreAdapter(
+        url=settings.qdrant_url,
+        api_key=settings.qdrant_api_key,
+        text_collection=settings.text_collection,
+        image_collection=settings.image_collection,
+        parent_collection=settings.parent_collection,
+        text_dim=registry.embeddings["text"].get("dimensions", 1024),
+        image_dim=registry.embeddings["image"].get("dimensions", 512),
+    )
 
-        # 向量数据库持久化路径
-        persist_directory = ROOT_DIR / "data_base" / "vector_db" / "chroma"
-        logger.info("Chroma 路径: %s", persist_directory)
+    bm25 = BM25Indexer(settings.bm25_index_file)
+    bm25.load()
 
-        # 加载数据库
-        vectordb = Chroma(
-            collection_name="default_kb",
-            persist_directory=str(persist_directory),
-            embedding_function=embedding
+    graph_engine = LightRAGGraphEngine(
+        settings.neo4j_uri,
+        settings.neo4j_user,
+        settings.neo4j_password,
+    )
+
+    orchestrator = RetrievalOrchestrator(
+        settings=settings,
+        registry=registry,
+        vector_store=vector_store,
+        bm25=bm25,
+        graph_engine=graph_engine,
+    )
+    return RAGPipeline(settings=settings, orchestrator=orchestrator, registry=registry)
+
+
+def _render_sidebar() -> tuple[SearchMode, bool, int]:
+    """渲染侧边栏控件，并返回当前选择的运行参数。"""
+    st.sidebar.header("运行参数")
+    mode_label = st.sidebar.selectbox(
+        "检索模式",
+        ["hybrid", "text_only", "multimodal", "graph_first"],
+        index=0,
+    )
+    top_k = st.sidebar.slider("Top K", min_value=3, max_value=20, value=10, step=1)
+    debug = st.sidebar.toggle("DEBUG_RAG", value=False)
+    return SearchMode(mode_label), debug, top_k
+
+
+def main() -> None:
+    """主 UI 入口。
+
+    Streamlit 会话状态保存：
+    - `messages`：聊天历史
+    - `pipeline`：已初始化的流水线单例
+    """
+    logger = setup_logging()
+    st.set_page_config(page_title="KB Assistant V2", layout="wide")
+    st.title("KB Assistant V2 · LightRAG + Multimodal")
+
+    if "pipeline" not in st.session_state:
+        # 仅在首次打开页面时初始化一次，后续复用同一实例。
+        st.session_state.pipeline = _bootstrap_pipeline()
+        logger.info("pipeline bootstrapped")
+
+    if "messages" not in st.session_state:
+        st.session_state.messages = []
+
+    mode, debug, top_k = _render_sidebar()
+
+    uploaded = st.file_uploader(
+        "上传图片（可选，用于多模态检索）",
+        type=["jpg", "jpeg", "png", "webp"],
+        accept_multiple_files=False,
+    )
+
+    chat_box = st.container(height=520)
+    for role, content in st.session_state.messages:
+        with chat_box.chat_message(role):
+            st.write(content)
+
+    if prompt := st.chat_input("请输入问题"):
+        st.session_state.messages.append(("human", prompt))
+        with chat_box.chat_message("human"):
+            st.write(prompt)
+
+        image_inputs = []
+        if uploaded is not None:
+            # 将上传图片落盘，供多模态检索链路复用同一路径输入。
+            temp_path = ROOT_DIR / "runtime" / "uploads"
+            temp_path.mkdir(parents=True, exist_ok=True)
+            img_file = temp_path / uploaded.name
+            img_file.write_bytes(uploaded.getvalue())
+            image_inputs.append(str(img_file))
+
+        req = RetrieverRequest(
+            query=prompt,
+            chat_history=st.session_state.messages,
+            modality=mode,
+            image_inputs=image_inputs,
+            top_k=top_k,
+            debug=debug,
         )
 
-        retriever = vectordb.as_retriever(search_kwargs={"k": 2})
-        logger.info("retriever 初始化完成，耗时 %.3fs", time.perf_counter() - start)
-        return retriever
+        stream, rewritten, ret = st.session_state.pipeline.answer_stream(req)
 
-    except Exception:
-        logger.exception("初始化 retriever 失败")
-        raise
+        with chat_box.chat_message("ai"):
+            # 保持流式输出不变，只补充调试信息展示。
+            answer_text = st.write_stream(stream)
+            st.caption(f"改写结果：{rewritten}")
+            st.caption(f"检索耗时：{ret.latency_ms} ms")
+            if ret.sources:
+                st.caption("来源：" + " | ".join(ret.sources[:6]))
+            if debug:
+                st.json(ret.debug_info)
 
-
-def combine_docs(docs):
-    try:
-        context_docs = docs["context"]
-        logger.info("开始拼接上下文，共 %d 个文档片段", len(context_docs))
-        combined = "\n\n".join(doc.page_content for doc in context_docs)
-        logger.info("上下文拼接完成，总长度 %d 字符", len(combined))
-        return combined
-    except Exception:
-        logger.exception("拼接上下文失败")
-        raise
-
-
-def get_qa_history_chain():
-    start = time.perf_counter()
-    try:
-        logger.info("开始初始化 QA 链")
-
-        retriever = get_retriever()
-
-        llm = ChatOpenAI(
-            api_key=st.secrets.get("QWEN_API_KEY"),
-            base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
-            model_name="qwen3.5-flash",
-        )
-        logger.info("LLM 初始化完成，模型: qwen3.5-flash")
-
-        condense_question_system_template = (
-            "请根据聊天记录总结用户最近的问题，"
-            "如果没有多余的聊天记录则返回用户的问题。"
-        )
-        condense_question_prompt = ChatPromptTemplate([
-            ("system", condense_question_system_template),
-            ("placeholder", "{chat_history}"),
-            ("human", "{input}"),
-        ])
-
-        retrieve_docs = RunnableBranch(
-            (
-                lambda x: not x.get("chat_history", False),
-                (lambda x: x["input"]) | retriever,
-            ),
-            condense_question_prompt | llm | StrOutputParser() | retriever,
-        )
-
-        system_prompt = (
-            "你是一个问答任务的助手。 "
-            "请使用检索到的上下文片段回答这个问题。 "
-            "如果你不知道答案就说不知道。 "
-            "请使用简洁的话语回答用户。"
-            "\n\n"
-            "{context}"
-        )
-
-        qa_prompt = ChatPromptTemplate.from_messages(
-            [
-                ("system", system_prompt),
-                ("placeholder", "{chat_history}"),
-                ("human", "{input}"),
-            ]
-        )
-
-        qa_chain = (
-            RunnablePassthrough().assign(context=combine_docs)
-            | qa_prompt
-            | llm
-            | StrOutputParser()
-        )
-
-        qa_history_chain = (
-            RunnablePassthrough()
-            .assign(context=retrieve_docs)
-            .assign(answer=qa_chain)
-        )
-
-        logger.info("QA 链初始化完成，耗时 %.3fs", time.perf_counter() - start)
-        return qa_history_chain
-
-    except Exception:
-        logger.exception("初始化 QA 链失败")
-        raise
-
-
-def gen_response(chain, input, chat_history):
-    start = time.perf_counter()
-    try:
-        logger.info(
-            "开始生成回答 | 输入长度=%d | 历史消息数=%d | 用户问题=%s",
-            len(input),
-            len(chat_history),
-            input[:100]
-        )
-
-        response = chain.stream({
-            "input": input,
-            "chat_history": chat_history
-        })
-
-        yielded = False
-        for res in response:
-            if "answer" in res.keys():
-                yielded = True
-                yield res["answer"]
-
-        logger.info(
-            "回答生成完成 | 是否有输出=%s | 总耗时=%.3fs",
-            yielded,
-            time.perf_counter() - start
-        )
-
-    except Exception:
-        logger.exception("生成回答失败")
-        raise
-
-
-# Streamlit 应用程序界面
-def main():
-    app_start = time.perf_counter()
-    logger.info("应用启动")
-
-    try:
-        st.markdown('### 🦜🔗 动手学大模型应用开发')
-
-        # 用于跟踪对话历史
-        if "messages" not in st.session_state:
-            st.session_state.messages = []
-            logger.info("初始化 session_state.messages")
-
-        # 存储检索问答链
-        if "qa_history_chain" not in st.session_state:
-            logger.info("session_state 中未发现 QA 链，开始创建")
-            st.session_state.qa_history_chain = get_qa_history_chain()
-
-        messages = st.container(height=550)
-
-        # 显示整个对话历史
-        logger.info("渲染历史消息，共 %d 条", len(st.session_state.messages))
-        for message in st.session_state.messages:
-            with messages.chat_message(message[0]):
-                st.write(message[1])
-
-        if prompt := st.chat_input("Say something"):
-            logger.info("收到用户输入: %s", prompt[:100])
-
-            # 将用户输入添加到对话历史中
-            st.session_state.messages.append(("human", prompt))
-            with messages.chat_message("human"):
-                st.write(prompt)
-
-            answer = gen_response(
-                chain=st.session_state.qa_history_chain,
-                input=prompt,
-                chat_history=st.session_state.messages
-            )
-
-            with messages.chat_message("ai"):
-                output = st.write_stream(answer)
-
-            st.session_state.messages.append(("ai", output))
-            logger.info("本轮对话完成，当前总消息数=%d", len(st.session_state.messages))
-
-        logger.info("本次页面执行完成，总耗时 %.3fs", time.perf_counter() - app_start)
-
-    except Exception:
-        logger.exception("main() 执行失败")
-        st.error("应用运行出错，请查看日志。")
-        raise
+        st.session_state.messages.append(("ai", answer_text))
 
 
 if __name__ == "__main__":
     main()
+

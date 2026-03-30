@@ -1,0 +1,38 @@
+﻿providers:
+  fast_model:
+    model: qwen-plus
+    base_url: https://dashscope.aliyuncs.com/compatible-mode/v1
+    api_key_env: QWEN_API_KEY
+    api_protocol: openai-compatible
+    supports_stream: true
+    supports_vision: false
+    supports_json_mode: true
+    max_context_tokens: 32000
+  quality_model:
+    model: qwen-max
+    base_url: https://dashscope.aliyuncs.com/compatible-mode/v1
+    api_key_env: QWEN_API_KEY
+    api_protocol: openai-compatible
+    supports_stream: true
+    supports_vision: false
+    supports_json_mode: true
+    max_context_tokens: 32000
+  vision_model:
+    model: qwen-vl-plus
+    base_url: https://dashscope.aliyuncs.com/compatible-mode/v1
+    api_key_env: QWEN_API_KEY
+    api_protocol: openai-compatible
+    supports_stream: true
+    supports_vision: true
+    supports_json_mode: true
+    max_context_tokens: 32000
+embeddings:
+  text:
+    model: text-embedding-v3
+    dimensions: 1024
+    base_url: https://dashscope.aliyuncs.com/compatible-mode/v1
+    api_key_env: QWEN_API_KEY
+  image:
+    provider: clip
+    model: sentence-transformers/clip-ViT-B-32-multilingual-v1
+    dimensions: 512
