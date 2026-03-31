@@ -70,9 +70,17 @@ class RetrievalOrchestrator:
                     vector=image_vectors[0],
                     top_k=max(req.top_k * 2, 10),
                 )
+        elif self.embedder.text_provider == "clip":
+            # CLIP 共享向量空间：以文搜图
+            text_vec_for_image = self.embedder.embed_query(req.query)
+            image_items = self.vector_store.search(
+                collection=self.settings.image_collection,
+                vector=text_vec_for_image,
+                top_k=max(req.top_k * 2, 10),
+            )
 
         # 第一层：按业务权重融合。
-        weights = normalize_weights(self.settings.retrieval_weights, use_image=bool(req.image_inputs))
+        weights = normalize_weights(self.settings.retrieval_weights, use_image=bool(req.image_inputs) or self.embedder.text_provider == "clip")
         merged_items, merged_scores = weighted_merge(
             dense_items,
             bm25_items,

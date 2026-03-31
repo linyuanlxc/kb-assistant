@@ -71,10 +71,20 @@ class EmbeddingProvider:
     def __init__(self, text_cfg: dict[str, Any], image_cfg: dict[str, Any]):
         self.cache_dir = _prepare_local_model_cache()
 
-        api_key = os.getenv(text_cfg["api_key_env"], "")
-        self.text_client = OpenAI(api_key=api_key, base_url=text_cfg["base_url"], timeout=20)
-        self.text_model = text_cfg["model"]
+        self.text_provider = text_cfg.get("provider", "api")
         self.text_dimensions = text_cfg.get("dimensions", 1024)
+
+        if self.text_provider == "clip":
+            # CLIP 本地模型：文本和图片共享同一向量空间
+            self.text_model_name = text_cfg.get("model", "")
+            self._text_model = None
+            if SentenceTransformer and self.text_model_name:
+                self._text_model = SentenceTransformer(self.text_model_name)
+        else:
+            # API 方式（OpenAI-compatible）
+            api_key = os.getenv(text_cfg.get("api_key_env", ""), "")
+            self.text_client = OpenAI(api_key=api_key, base_url=text_cfg.get("base_url", ""), timeout=20)
+            self.text_model = text_cfg.get("model", "")
 
         self.image_model_name = image_cfg.get("model", "")
         self._image_model = None
@@ -85,10 +95,13 @@ class EmbeddingProvider:
         """使用配置好的文本 embedding 模型批量向量化文本。"""
         if not texts:
             return []
-        result: list[list[float]] = []
 
-        # 按批请求，避免单次请求过大导致超时或限流。
-        # DashScope 的 text-embedding-v3 单次最大 batch 为 10。
+        if self.text_provider == "clip":
+            if not self._text_model:
+                return [[0.0] * self.text_dimensions for _ in texts]
+            return self._text_model.encode(texts, normalize_embeddings=True).tolist()
+
+        result: list[list[float]] = []
         batch_size = 10
         for i in range(0, len(texts), batch_size):
             batch = texts[i : i + batch_size]

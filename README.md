@@ -2,6 +2,70 @@
 
 一个可部署的个人知识库助手，基于 `LightRAG + Qdrant + Neo4j + 多模态检索`，支持文本/图片入库、混合检索、流式回答、调试面板和增量索引。
 
+## Quick Start
+
+### 1. 启动依赖服务（Qdrant & Neo4j）
+
+使用 Docker 一键启动：
+
+```bash
+# Qdrant 向量数据库
+docker run -d --name qdrant -p 6333:6333 -v qdrant_storage:/qdrant/storage qdrant/qdrant
+
+# Neo4j 图数据库
+docker run -d --name neo4j \
+  -p 7474:7474 -p 7687:7687 \
+  -e NEO4J_AUTH=neo4j/neo4j \
+  -v neo4j_data:/data \
+  neo4j:latest
+```
+
+> 启动后可通过 `http://localhost:7474` 访问 Neo4j 浏览器（账号 `neo4j` / 密码 `neo4j`）。
+>
+> 若不启动 Neo4j，系统会自动降级为无图检索模式，不影响基本使用。
+
+### 2. 克隆项目 & 安装依赖
+
+```bash
+git clone <repo-url> && cd kb-assistant
+pip install -r requirements.txt
+```
+
+### 3. 配置 API Key
+
+```bash
+# 默认使用智谱 AI（免费），去 https://open.bigmodel.cn 注册获取
+export ZHIPUAI_API_KEY="your_api_key_here"
+
+# 如需使用其他服务，可通过环境变量覆盖
+# export QDRANT_URL="http://localhost:6333"
+# export NEO4J_URI="bolt://localhost:7687"
+# export NEO4J_USER="neo4j"
+# export NEO4J_PASSWORD="neo4j"
+```
+
+> 如果想用阿里云千问模型，修改 `core/config/model_registry.yaml` 中的配置即可，详见文件内注释。
+
+### 4. 构建索引
+
+将 `kb_source/` 目录下的知识文件入库：
+
+```bash
+# 全量构建（首次运行 / 切换 Embedding 模型后）
+python scripts/build_kb.py --full
+
+# 后续增量更新
+python scripts/build_kb.py
+```
+
+### 5. 启动应用
+
+```bash
+streamlit run app/streamlit_app.py
+```
+
+浏览器打开 `http://localhost:8501`，即可开始使用。支持切换检索模式（hybrid/text_only/multimodal/graph_first）和图片上传多模态检索。
+
 ## 1. 核心能力
 
 - 文本与图片统一入库（增量更新）

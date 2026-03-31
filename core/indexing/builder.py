@@ -46,7 +46,7 @@ class IndexBuilder:
             text_collection=settings.text_collection,
             image_collection=settings.image_collection,
             parent_collection=settings.parent_collection,
-            text_dim=self.registry.embeddings["text"].get("dimensions", 1024),
+            text_dim=self.registry.embeddings["text"].get("dimensions", 512),
             image_dim=self.registry.embeddings["image"].get("dimensions", 512),
         )
         self.bm25 = BM25Indexer(settings.bm25_index_file)

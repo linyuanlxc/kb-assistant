@@ -51,7 +51,7 @@ class QdrantVectorStoreAdapter(VectorStoreAdapter):
         text_collection: str,
         image_collection: str,
         parent_collection: str,
-        text_dim: int = 1024,
+        text_dim: int = 512,
         image_dim: int = 512,
         upsert_batch_size: int = 64,
     ):

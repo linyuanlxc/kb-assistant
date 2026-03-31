@@ -1,37 +1,88 @@
-﻿providers:
+﻿# ============================================================
+# 模型注册表
+# 注意，如果切换了embedding模型，需重建索引：python scripts/build_kb.py --full
+# ============================================================
+
+providers:
+  # --- 智谱 AI（默认） ---
   fast_model:
-    model: qwen-plus
-    base_url: https://dashscope.aliyuncs.com/compatible-mode/v1
-    api_key_env: QWEN_API_KEY
+    model: glm-4-flash
+    base_url: https://open.bigmodel.cn/api/paas/v4
+    api_key_env: ZHIPUAI_API_KEY
     api_protocol: openai-compatible
     supports_stream: true
     supports_vision: false
     supports_json_mode: true
     max_context_tokens: 32000
   quality_model:
-    model: qwen-max
-    base_url: https://dashscope.aliyuncs.com/compatible-mode/v1
-    api_key_env: QWEN_API_KEY
+    model: glm-4-flash
+    base_url: https://open.bigmodel.cn/api/paas/v4
+    api_key_env: ZHIPUAI_API_KEY
     api_protocol: openai-compatible
     supports_stream: true
     supports_vision: false
     supports_json_mode: true
     max_context_tokens: 32000
   vision_model:
-    model: qwen-vl-plus
-    base_url: https://dashscope.aliyuncs.com/compatible-mode/v1
-    api_key_env: QWEN_API_KEY
+    model: glm-4v-flash
+    base_url: https://open.bigmodel.cn/api/paas/v4
+    api_key_env: ZHIPUAI_API_KEY
     api_protocol: openai-compatible
     supports_stream: true
     supports_vision: true
     supports_json_mode: true
     max_context_tokens: 32000
+
+  # --- 阿里云千问（备选，取消下方注释并注释上方智谱配置即可切换） ---
+  # fast_model:
+  #   model: qwen-plus
+  #   base_url: https://dashscope.aliyuncs.com/compatible-mode/v1
+  #   api_key_env: QWEN_API_KEY
+  #   api_protocol: openai-compatible
+  #   supports_stream: true
+  #   supports_vision: false
+  #   supports_json_mode: true
+  #   max_context_tokens: 32000
+  # quality_model:
+  #   model: qwen-max
+  #   base_url: https://dashscope.aliyuncs.com/compatible-mode/v1
+  #   api_key_env: QWEN_API_KEY
+  #   api_protocol: openai-compatible
+  #   supports_stream: true
+  #   supports_vision: false
+  #   supports_json_mode: true
+  #   max_context_tokens: 32000
+  # vision_model:
+  #   model: qwen-vl-plus
+  #   base_url: https://dashscope.aliyuncs.com/compatible-mode/v1
+  #   api_key_env: QWEN_API_KEY
+  #   api_protocol: openai-compatible
+  #   supports_stream: true
+  #   supports_vision: true
+  #   supports_json_mode: true
+  #   max_context_tokens: 32000
+
 embeddings:
+  # --- CLIP 本地模型（默认，支持跨模态检索：以文搜图 / 以图搜文） ---
   text:
-    model: text-embedding-v3
-    dimensions: 1024
-    base_url: https://dashscope.aliyuncs.com/compatible-mode/v1
-    api_key_env: QWEN_API_KEY
+    provider: clip
+    model: sentence-transformers/clip-ViT-B-32-multilingual-v1
+    dimensions: 512
+
+  # --- 智谱 AI（备选，不支持跨模态检索） ---
+  # text:
+  #   model: embedding-3
+  #   dimensions: 1024
+  #   base_url: https://open.bigmodel.cn/api/paas/v4
+  #   api_key_env: ZHIPUAI_API_KEY
+
+  # --- 阿里云千问（备选，不支持跨模态检索） ---
+  # text:
+  #   model: text-embedding-v3
+  #   dimensions: 1024
+  #   base_url: https://dashscope.aliyuncs.com/compatible-mode/v1
+  #   api_key_env: QWEN_API_KEY
+
   image:
     provider: clip
     model: sentence-transformers/clip-ViT-B-32-multilingual-v1
