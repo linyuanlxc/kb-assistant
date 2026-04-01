@@ -1,14 +1,17 @@
-﻿"""KB Assistant V2 的 Streamlit 应用入口。
+﻿"""KB Assistant V2 - Streamlit 应用入口。
 
 功能说明：
+- 深色/浅色主题切换
+- 三栏布局（聊天 + 来源面板）
 - 混合检索（Qdrant + BM25 + LightRAG）
-- 支持图片上传的多模态检索
-- 流式回答生成
+- 支持图片上传的多模态检索（以文搜图、以图搜图）
+- 流式回答生成 + 检索来源可视化
 - 带检索诊断信息的调试面板
 """
 
 from __future__ import annotations
 
+import base64
 import sys
 from pathlib import Path
 
@@ -27,13 +30,70 @@ from core.providers.model_provider import ModelRegistry
 from core.retrieval.graph_retriever import LightRAGGraphEngine
 from core.types import RetrieverRequest, SearchMode
 
+from app.components.chat_panel import render_chat_messages, render_streaming_answer
+from app.components.sidebar import render_sidebar
+from app.components.source_panel import render_source_panel
+from app.components.topbar import render_topbar
+
+
+# ── CSS 注入 ──
+_CSS_PATH = Path(__file__).resolve().parent / "styles" / "theme.css"
+
+
+def _inject_css(theme: str) -> None:
+    """注入自定义主题 CSS。
+
+    策略：根据 theme 值直接生成对应变量集的 CSS，
+    不依赖 JS/data-theme 属性切换（避免 iframe 跨域问题）。
+    """
+    if not _CSS_PATH.exists():
+        return
+    css_text = _CSS_PATH.read_text(encoding="utf-8")
+
+    if theme == "light":
+        # 替换 :root 中的暗色变量为亮色变量
+        light_vars = {
+            "--bg-primary": "#F8F9FC",
+            "--bg-secondary": "#FFFFFF",
+            "--bg-card": "#FFFFFF",
+            "--bg-hover": "#F1F3F8",
+            "--border-color": "#E2E5EF",
+            "--text-primary": "#1F2937",
+            "--text-secondary": "#4B5563",
+            "--text-muted": "#9CA3AF",
+            "--accent-blue": "#2563EB",
+            "--accent-green": "#059669",
+            "--accent-red": "#DC2626",
+            "--accent-yellow": "#D97706",
+            "--accent-teal": "#0D9488",
+            "--accent-blue-dim": "rgba(37, 99, 235, 0.1)",
+            "--topbar-bg": "var(--bg-secondary)",
+            "--msg-ai-bg": "#F3F4F6",
+            "--msg-ai-border": "var(--border-color)",
+            "--input-bg": "#F3F4F6",
+            "--card-hover-border": "var(--accent-blue)",
+            "--shadow-card": "0 1px 4px rgba(0, 0, 0, 0.08)",
+            "--shadow-glow": "0 0 16px rgba(37, 99, 235, 0.1)",
+        }
+        var_overrides = "\n".join(f"  {k}: {v};" for k, v in light_vars.items())
+        theme_css = f":root {{\n{var_overrides}\n}}"
+        # 注入亮色变量覆盖 + 通用样式
+        st.markdown(
+            f"<style>{theme_css}\n{css_text}</style>",
+            unsafe_allow_html=True,
+        )
+    else:
+        st.markdown(f"<style>{css_text}</style>", unsafe_allow_html=True)
+
+
+# ── Pipeline 初始化 ──
+
 
 def _bootstrap_pipeline() -> RAGPipeline:
-    """初始化运行时依赖，并返回可直接使用的 RAG 流水线。"""
+    """初始化运行时依赖，返回可用的 RAG 流水线。"""
     settings = load_settings()
     registry = ModelRegistry(settings.model_registry_path)
 
-    # 先构建底层检索组件，再统一交给编排层组装，避免 UI 层直接接触细节实现。
     vector_store = QdrantVectorStoreAdapter(
         url=settings.qdrant_url,
         api_key=settings.qdrant_api_key,
@@ -63,89 +123,169 @@ def _bootstrap_pipeline() -> RAGPipeline:
     return RAGPipeline(settings=settings, orchestrator=orchestrator, registry=registry)
 
 
-def _render_sidebar() -> tuple[SearchMode, bool, int]:
-    """渲染侧边栏控件，并返回当前选择的运行参数。"""
-    st.sidebar.header("运行参数")
-    mode_label = st.sidebar.selectbox(
-        "检索模式",
-        ["hybrid", "text_only", "multimodal", "graph_first"],
-        index=0,
-    )
-    top_k = st.sidebar.slider("Top K", min_value=3, max_value=20, value=10, step=1)
-    debug = st.sidebar.toggle("DEBUG_RAG", value=False)
-    return SearchMode(mode_label), debug, top_k
+# ── 图片上传与预览 ──
 
 
-def main() -> None:
-    """主 UI 入口。
-
-    Streamlit 会话状态保存：
-    - `messages`：聊天历史
-    - `pipeline`：已初始化的流水线单例
-    """
-    logger = setup_logging()
-    st.set_page_config(page_title="KB Assistant V2", layout="wide")
-    st.title("KB Assistant V2 · LightRAG + Multimodal")
-
-    if "pipeline" not in st.session_state:
-        # 仅在首次打开页面时初始化一次，后续复用同一实例。
-        st.session_state.pipeline = _bootstrap_pipeline()
-        logger.info("pipeline bootstrapped")
-
-    if "messages" not in st.session_state:
-        st.session_state.messages = []
-
-    mode, debug, top_k = _render_sidebar()
-
+def _render_image_upload() -> tuple[object, list[str]]:
+    """渲染图片上传区域和预览。"""
     uploaded = st.file_uploader(
         "上传图片（可选，用于多模态检索）",
         type=["jpg", "jpeg", "png", "webp"],
         accept_multiple_files=False,
+        label_visibility="collapsed",
+        key="image_uploader",
     )
 
-    chat_box = st.container(height=520)
-    for role, content in st.session_state.messages:
-        with chat_box.chat_message(role):
-            st.write(content)
+    image_paths: list[str] = []
+    if uploaded is not None:
+        temp_dir = ROOT_DIR / "runtime" / "uploads"
+        temp_dir.mkdir(parents=True, exist_ok=True)
+        img_file = temp_dir / uploaded.name
+        img_file.write_bytes(uploaded.getvalue())
+        image_paths.append(str(img_file))
 
-    if prompt := st.chat_input("请输入问题"):
-        st.session_state.messages.append(("human", prompt))
-        with chat_box.chat_message("human"):
-            st.write(prompt)
-
-        image_inputs = []
-        if uploaded is not None:
-            # 将上传图片落盘，供多模态检索链路复用同一路径输入。
-            temp_path = ROOT_DIR / "runtime" / "uploads"
-            temp_path.mkdir(parents=True, exist_ok=True)
-            img_file = temp_path / uploaded.name
-            img_file.write_bytes(uploaded.getvalue())
-            image_inputs.append(str(img_file))
-
-        req = RetrieverRequest(
-            query=prompt,
-            chat_history=st.session_state.messages,
-            modality=mode,
-            image_inputs=image_inputs,
-            top_k=top_k,
-            debug=debug,
+        b64 = base64.b64encode(uploaded.getvalue()).decode("utf-8")
+        st.markdown(
+            f"""
+            <div class="upload-preview-area">
+                <div class="upload-preview-thumb">
+                    <img src="data:image/jpeg;base64,{b64}" alt="preview">
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
         )
+        st.caption(f"已选择: {uploaded.name}（用于图片相似搜索）")
 
-        stream, rewritten, ret = st.session_state.pipeline.answer_stream(req)
+    return uploaded, image_paths
 
-        with chat_box.chat_message("ai"):
-            # 保持流式输出不变，只补充调试信息展示。
-            answer_text = st.write_stream(stream)
-            st.caption(f"改写结果：{rewritten}")
-            st.caption(f"检索耗时：{ret.latency_ms} ms")
-            if ret.sources:
-                st.caption("来源：" + " | ".join(ret.sources[:6]))
-            if debug:
-                st.json(ret.debug_info)
 
-        st.session_state.messages.append(("ai", answer_text))
+def _save_uploaded_image(uploaded: object) -> list[str]:
+    """将上传图片保存并返回路径。"""
+    if uploaded is None:
+        return []
+
+    temp_dir = ROOT_DIR / "runtime" / "uploads"
+    temp_dir.mkdir(parents=True, exist_ok=True)
+    img_file = temp_dir / uploaded.name
+    img_file.write_bytes(uploaded.getvalue())
+    return [str(img_file)]
+
+
+# ── 主入口 ──
+
+
+def main() -> None:
+    """主 UI 入口。"""
+    logger = setup_logging()
+
+    st.set_page_config(
+        page_title="KB Assistant V2",
+        layout="wide",
+        initial_sidebar_state="expanded",
+    )
+
+    # 主题状态
+    if "theme" not in st.session_state:
+        st.session_state.theme = "dark"
+
+    # 注入主题 CSS
+    _inject_css(st.session_state.theme)
+
+    # 初始化 pipeline
+    if "pipeline" not in st.session_state:
+        st.session_state.pipeline = _bootstrap_pipeline()
+        logger.info("pipeline bootstrapped")
+
+    # 消息历史
+    if "messages" not in st.session_state:
+        st.session_state.messages = []
+
+    # 最新检索结果
+    if "latest_retrieval" not in st.session_state:
+        st.session_state.latest_retrieval = None
+
+    # 顶栏
+    render_topbar(st.session_state.pipeline)
+
+    # 侧边栏
+    with st.sidebar:
+        mode, debug, top_k = render_sidebar()
+
+        st.markdown("---")
+        if st.button("新对话", use_container_width=True, type="secondary"):
+            st.session_state.messages = []
+            st.session_state.latest_retrieval = None
+            st.rerun()
+
+    # 主体三栏布局
+    chat_col, source_col = st.columns([5, 2])
+
+    with chat_col:
+        render_chat_messages(st.session_state.messages)
+
+        # 图片上传
+        with st.expander("上传图片进行搜索", expanded=False):
+            uploaded, image_paths = _render_image_upload()
+
+        # 聊天输入
+        if prompt := st.chat_input("输入问题，或上传图片搜索相似内容..."):
+            saved_paths = _save_uploaded_image(uploaded) if uploaded else []
+
+            user_msg = {"role": "human", "content": prompt}
+            if saved_paths:
+                user_msg["image_path"] = saved_paths[0]
+            st.session_state.messages.append(user_msg)
+
+            with st.chat_message("human"):
+                if saved_paths:
+                    p = Path(saved_paths[0])
+                    if p.exists():
+                        st.image(str(p), width=200)
+                st.markdown(prompt)
+
+            req = RetrieverRequest(
+                query=prompt,
+                chat_history=[(m.get("role", ""), m.get("content", "")) for m in st.session_state.messages],
+                modality=mode,
+                image_inputs=saved_paths,
+                top_k=top_k,
+                debug=debug,
+            )
+
+            stream, rewritten, ret = st.session_state.pipeline.answer_stream(req)
+
+            answer_text = render_streaming_answer(
+                stream=stream,
+                rewritten=rewritten,
+                latency_ms=ret.latency_ms,
+                sources=ret.sources,
+            )
+
+            ai_msg = {
+                "role": "ai",
+                "content": answer_text,
+                "sources": ret.sources,
+                "latency_ms": ret.latency_ms,
+                "rewritten": rewritten,
+            }
+            st.session_state.messages.append(ai_msg)
+
+            st.session_state.latest_retrieval = {
+                "items": ret.items,
+                "debug_info": ret.debug_info,
+                "debug": debug,
+            }
+
+    with source_col:
+        ret_data = st.session_state.latest_retrieval
+        render_source_panel(
+            sources=ret_data["items"][0].source if ret_data and ret_data["items"] else None,
+            items=ret_data["items"] if ret_data else None,
+            debug_info=ret_data["debug_info"] if ret_data else None,
+            debug=ret_data["debug"] if ret_data else False,
+        )
 
 
 if __name__ == "__main__":
     main()
-
