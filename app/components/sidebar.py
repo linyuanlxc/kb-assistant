@@ -1,4 +1,4 @@
-"""侧边栏组件：主题切换、检索模式、Top K、Debug、系统信息。"""
+"""侧边栏组件：检索模式、参数、系统信息。"""
 
 from __future__ import annotations
 
@@ -7,72 +7,78 @@ import streamlit as st
 from core.types import SearchMode
 
 
-def render_sidebar() -> tuple[SearchMode, bool, int]:
-    """渲染侧边栏控件，返回 (检索模式, debug开关, top_k)。"""
+def render_sidebar(pipeline) -> tuple[SearchMode, bool, int]:
+    # ── System Status (auto-refresh on each rerun) ──
+    qdrant_ok = pipeline.orchestrator.vector_store.health()
+    graph_ok = pipeline.orchestrator.graph_engine.health()
+    ready_ok = qdrant_ok and graph_ok
 
-    # ── 主题切换 ──
-    st.markdown('<div class="sidebar-label">外观</div>', unsafe_allow_html=True)
-    theme_options = {"light": "浅色模式", "dark": "深色模式"}
-    current = st.session_state.get("theme", "dark")
-    new_theme_key = st.radio(
-        "主题",
-        list(theme_options.keys()),
-        format_func=lambda x: theme_options[x],
-        label_visibility="collapsed",
-        horizontal=True,
-        index=0 if current == "light" else 1,
+    st.markdown(
+        f"""
+        <div class="sidebar-brand">
+            <div class="sidebar-brand-mark">KB</div>
+            <div class="sidebar-brand-copy">
+                <div class="sidebar-brand-title">KB Assistant</div>
+                <div class="sidebar-brand-subtitle">Knowledge Chat Workspace</div>
+            </div>
+        </div>
+        <div class="sidebar-status-stack">
+            <div class="sidebar-status-item">
+                <span class="status-dot {"online" if qdrant_ok else "offline"}"></span>
+                <span>Qdrant</span>
+            </div>
+            <div class="sidebar-status-item">
+                <span class="status-dot {"online" if graph_ok else "offline"}"></span>
+                <span>Neo4j</span>
+            </div>
+            <div class="sidebar-status-item">
+                <span class="status-dot {"online" if ready_ok else "offline"}"></span>
+                <span>Ready</span>
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
     )
-    if new_theme_key != current:
-        st.session_state.theme = new_theme_key
-        st.rerun()
     st.markdown("---")
 
-    # ── 检索模式 ──
-    st.markdown('<div class="sidebar-label">检索模式</div>', unsafe_allow_html=True)
-
+    # ── Search Mode ──
+    st.markdown('<div class="sidebar-label">Search Mode</div>', unsafe_allow_html=True)
     mode_map = {
-        "混合检索": SearchMode.HYBRID,
-        "纯文本": SearchMode.TEXT_ONLY,
-        "多模态": SearchMode.MULTIMODAL,
-        "图谱优先": SearchMode.GRAPH_FIRST,
+        "Hybrid": SearchMode.HYBRID,
+        "Text Only": SearchMode.TEXT_ONLY,
+        "Multimodal": SearchMode.MULTIMODAL,
+        "Graph First": SearchMode.GRAPH_FIRST,
     }
     mode_desc = {
-        "混合检索": "Dense + BM25 + Graph + Image",
-        "纯文本": "仅向量 + 关键词检索",
-        "多模态": "支持图片输入的跨模态检索",
-        "图谱优先": "图谱关系优先召回",
+        "Hybrid": "Dense + BM25 + Graph + Image",
+        "Text Only": "Vector + keyword only",
+        "Multimodal": "Cross-modal image search",
+        "Graph First": "Knowledge graph priority",
     }
-
-    selected_label = st.radio(
-        "检索模式",
-        list(mode_map.keys()),
-        label_visibility="collapsed",
-    )
-    mode = mode_map[selected_label]
-
-    st.caption(mode_desc[selected_label])
+    selected = st.radio("Mode", list(mode_map.keys()), label_visibility="collapsed")
+    st.caption(mode_desc[selected])
     st.markdown("---")
 
-    # ── Top K ──
-    st.markdown('<div class="sidebar-label">检索参数</div>', unsafe_allow_html=True)
+    # ── Params ──
+    st.markdown('<div class="sidebar-label">Parameters</div>', unsafe_allow_html=True)
     top_k = st.slider("Top K", min_value=3, max_value=20, value=10, step=1)
     st.markdown("---")
 
     # ── Debug ──
-    debug = st.toggle("Debug 模式", value=False, help="展示检索诊断信息")
+    debug = st.toggle("Debug", value=False)
     st.markdown("---")
 
-    # ── 系统信息 ──
-    st.markdown('<div class="sidebar-label">系统信息</div>', unsafe_allow_html=True)
+    # ── System Info ──
+    st.markdown('<div class="sidebar-label">System</div>', unsafe_allow_html=True)
     st.markdown(
         """
         <div class="sys-info-card">
-            <div>模型: <b>GLM-4-Flash</b></div>
+            <div>LLM: <b>GLM-4-Flash</b></div>
             <div>Embedding: <b>CLIP ViT-B/32</b></div>
-            <div>向量维度: <b>512d</b></div>
+            <div>Dimension: <b>512d</b></div>
         </div>
         """,
         unsafe_allow_html=True,
     )
 
-    return mode, debug, top_k
+    return mode_map[selected], debug, top_k

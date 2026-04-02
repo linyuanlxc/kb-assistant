@@ -1,4 +1,4 @@
-﻿# KB Assistant V2 接口契约
+﻿# KB Assistant V3 接口契约
 
 ## 数据契约
 
@@ -34,19 +34,60 @@ RetrieverResult(
 ### 索引构建
 
 ```bash
-python scripts/build_kb.py        # 默认增量构建
-python scripts/build_kb.py --full # 执行全量重建
+python scripts/build_kb.py
+python scripts/build_kb.py --full
 ```
 
-### Web 应用
+### Web 服务
 
 ```bash
-streamlit run app/streamlit_app.py
+uvicorn webapp.main:app --host 0.0.0.0 --port 8000 --reload
 ```
+
+## HTTP 接口
+
+### `GET /api/health`
+
+返回：
+
+```json
+{
+  "ready": true,
+  "qdrant": true,
+  "neo4j": true,
+  "modes": []
+}
+```
+
+### `POST /api/chat/stream`
+
+请求类型：`multipart/form-data`
+
+字段：
+
+- `query`: 当前问题
+- `mode`: `hybrid | text_only | multimodal | graph_first`
+- `top_k`: 召回条数
+- `debug`: 是否返回调试信息
+- `chat_history`: JSON 数组
+- `image`: 可选图片文件
+
+响应类型：`text/event-stream`
+
+事件：
+
+- `meta`
+- `token`
+- `done`
+- `error`
+
+### `GET /files?path=...`
+
+仅允许访问仓库根目录内的文件，用于图片和来源文件展示。
 
 ## 设计约束
 
-- 检索融合默认权重：`text_dense=0.35`、`bm25=0.20`、`graph=0.25`、`image_clip=0.20`
-- 没有图片输入时，自动禁用 `image` 分支并重新归一化权重
-- Neo4j 不可用时，自动降级为不包含 `graph` 的 `hybrid` 模式
+- 没有图片输入时，自动禁用 `image` 分支并重归一化权重
+- Neo4j 不可用时，系统会降级为无图谱优先的检索路径
 - 所有模型调用均使用 OpenAI-compatible 协议
+- Web UI 通过 SSE 接收流式回答

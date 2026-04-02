@@ -1,4 +1,4 @@
-"""顶栏组件：品牌标题、健康状态指示器。"""
+"""顶栏组件：品牌标题 + 健康状态。"""
 
 from __future__ import annotations
 
@@ -6,29 +6,28 @@ import streamlit as st
 
 
 def render_topbar(pipeline) -> None:
-    """渲染顶部导航栏。"""
     qdrant_ok = pipeline.orchestrator.vector_store.health()
     graph_ok = pipeline.orchestrator.graph_engine.health()
-    neo4j_cls = "online" if graph_ok else "offline"
-    ready_cls = "online" if qdrant_ok else "offline"
 
     st.markdown(
         f"""
         <div class="topbar">
-            <div class="topbar-title">
+            <div class="topbar-brand">
                 <span class="logo-icon">KB</span>
-                KB Assistant V2
-                <span class="topbar-subtitle">LightRAG + Multimodal</span>
+                <div class="topbar-copy">
+                    <div class="topbar-title">KB Assistant</div>
+                    <div class="topbar-subtitle">Knowledge chat workspace</div>
+                </div>
             </div>
             <div class="topbar-actions">
                 <span class="topbar-status">
                     <span class="status-dot online"></span>Qdrant
                 </span>
                 <span class="topbar-status">
-                    <span class="status-dot {neo4j_cls}"></span>Neo4j
+                    <span class="status-dot {"online" if graph_ok else "offline"}"></span>Neo4j
                 </span>
                 <span class="topbar-status">
-                    <span class="status-dot {ready_cls}"></span>检索就绪
+                    <span class="status-dot {"online" if qdrant_ok else "offline"}"></span>Ready
                 </span>
             </div>
         </div>

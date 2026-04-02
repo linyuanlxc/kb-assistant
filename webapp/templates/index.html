@@ -1,0 +1,128 @@
+﻿<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="light" />
+    <title>KB Assistant</title>
+    <link rel="stylesheet" href="/static/app.css" />
+  </head>
+  <body>
+    <div class="app-shell" id="appShell">
+      <!-- Left Sidebar -->
+      <aside class="sidebar sidebar--left" id="sidebarPanel">
+        <div class="sidebar-header">
+          <div class="brand-block">
+            <div class="brand-mark">KB</div>
+            <div class="brand-copy">
+              <div class="brand-name">KB Assistant</div>
+            </div>
+          </div>
+        </div>
+
+        <button class="primary-button" id="newChatBtn" type="button">新建对话</button>
+
+        <section class="sidebar-section">
+          <div class="section-label">系统状态</div>
+          <div class="status-cluster" id="statusCluster">
+            <div class="status-pill"><span class="status-dot is-off"></span><span>Qdrant</span></div>
+            <div class="status-pill"><span class="status-dot is-off"></span><span>Neo4j</span></div>
+            <div class="status-pill"><span class="status-dot is-off"></span><span>Ready</span></div>
+          </div>
+        </section>
+
+        <section class="sidebar-section">
+          <div class="section-label">检索模式</div>
+          <div class="mode-list">
+            {% for option in mode_options %}
+            <label class="mode-option">
+              <input type="radio" name="mode" value="{{ option.value }}" {% if option.value == default_mode %}checked{% endif %} />
+              <span>
+                <strong>{{ option.label }}</strong>
+                <small>{{ option.description }}</small>
+              </span>
+            </label>
+            {% endfor %}
+          </div>
+        </section>
+
+        <section class="sidebar-section">
+          <div class="section-label">高级选项</div>
+          <label class="field-label" for="topKRange">Top K <span id="topKValue">10</span></label>
+          <input id="topKRange" type="range" min="3" max="20" step="1" value="10" />
+          <label class="toggle-row" for="debugToggle">
+            <span>显示调试信息</span>
+            <input id="debugToggle" type="checkbox" />
+          </label>
+        </section>
+      </aside>
+
+      <!-- Main Content -->
+      <main class="main-shell">
+        <header class="topbar">
+          <button class="topbar-toggle topbar-toggle--left" id="toggleSidebarBtn" type="button" title="收起侧边栏">
+            <svg class="icon-collapse" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+            <svg class="icon-expand" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+          </button>
+          <div class="topbar-title" id="headerStatus">KB Assistant</div>
+          <button class="topbar-toggle topbar-toggle--right" id="toggleInspectorBtn" type="button" title="收起检索面板">
+            <svg class="icon-collapse" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+            <svg class="icon-expand" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+          </button>
+        </header>
+
+        <section class="chat-panel" aria-live="polite">
+          <div class="chat-scroll">
+            <div class="message-list" id="messageList"></div>
+          </div>
+
+          <form id="chatForm" class="composer">
+            <div id="uploadPreview" class="upload-preview is-hidden"></div>
+            <div class="composer-box">
+              <textarea id="queryInput" name="query" rows="1" placeholder="给 KB Assistant 发送消息"></textarea>
+              <div class="composer-toolbar">
+                <label class="upload-icon-btn" for="imageInput" title="上传图片 (JPG / PNG / WEBP)">
+                  <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="4"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg>
+                </label>
+                <input id="imageInput" name="image" type="file" accept=".jpg,.jpeg,.png,.webp" />
+                <button class="send-btn" id="sendButton" type="submit" title="发送">
+                  <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M3.478 2.405a.75.75 0 0 0-.926.94l2.432 7.905H13.5a.75.75 0 0 1 0 1.5H4.984l-2.432 7.905a.75.75 0 0 0 .926.94 60.519 60.519 0 0 0 18.445-8.986.75.75 0 0 0 0-1.218A60.517 60.517 0 0 0 3.478 2.405Z"/></svg>
+                </button>
+              </div>
+            </div>
+          </form>
+        </section>
+      </main>
+
+      <!-- Right Sidebar -->
+      <aside class="sidebar sidebar--right" id="inspectorPanel">
+        <div class="sidebar-header">
+          <div class="section-label">检索结果</div>
+        </div>
+
+        <div class="sidebar-body" id="inspectorBody">
+          <div class="inspector-empty" id="inspectorEmpty">发送一条消息后，这里会展示来源和调试信息。</div>
+          <div class="source-columns is-hidden" id="sourceColumns">
+            <section class="sidebar-section">
+              <div class="source-label">文本来源</div>
+              <div id="textSources"></div>
+            </section>
+            <section class="sidebar-section">
+              <div class="source-label">图片来源</div>
+              <div id="imageSources"></div>
+            </section>
+          </div>
+          <details class="debug-box is-hidden" id="debugBox">
+            <summary>调试信息</summary>
+            <pre id="debugPayload"></pre>
+          </details>
+        </div>
+      </aside>
+    </div>
+
+    <script>
+      window.KB_BOOTSTRAP = {{ {"defaultMode": default_mode, "modeOptions": mode_options}|tojson }};
+    </script>
+    <script src="/static/app.js" defer></script>
+  </body>
+</html>
