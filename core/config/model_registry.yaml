@@ -96,12 +96,12 @@ embeddings:
 # model:     当 provider=cross-encoder 时，使用的模型名称
 # ============================================================
 reranker:
-  # enabled: true
-  # provider: llm
-  # model_key: fast_model
-  # --- Cross-Encoder 方案（取消注释并注释上方 llm 配置即可切换）---
   enabled: true
-  provider: cross-encoder
-  model: BAAI/bge-reranker-v2-m3
-  batch_size: 32
-  max_length: 512
+  provider: llm
+  model_key: fast_model
+  # --- Cross-Encoder 方案（取消注释并注释上方 llm 配置即可切换）---
+  # enabled: true
+  # provider: cross-encoder
+  # model: BAAI/bge-reranker-v2-m3
+  # batch_size: 32
+  # max_length: 512
