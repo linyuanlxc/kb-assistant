@@ -87,3 +87,21 @@ embeddings:
     provider: clip
     model: sentence-transformers/clip-ViT-B-32-multilingual-v1
     dimensions: 512
+
+# ============================================================
+# 重排器配置
+# enabled: 是否启用重排阶段
+# provider: "llm"（使用已有 LLM 打分，零成本）或 "cross-encoder"（本地模型，精度更高）
+# model_key: 当 provider=llm 时，使用哪个已注册的对话模型
+# model:     当 provider=cross-encoder 时，使用的模型名称
+# ============================================================
+reranker:
+  # enabled: true
+  # provider: llm
+  # model_key: fast_model
+  # --- Cross-Encoder 方案（取消注释并注释上方 llm 配置即可切换）---
+  enabled: true
+  provider: cross-encoder
+  model: BAAI/bge-reranker-v2-m3
+  batch_size: 32
+  max_length: 512

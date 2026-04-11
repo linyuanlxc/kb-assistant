@@ -50,6 +50,7 @@ class AppSettings:
     neo4j_password: str = os.getenv("NEO4J_PASSWORD", "neo4j")
 
     debug_rag: bool = os.getenv("DEBUG_RAG", "false").lower() == "true"
+    rerank_enabled: bool = os.getenv("RERANK_ENABLED", "true").lower() == "true"
     model_registry_path: Path = ROOT_DIR / "core" / "config" / "model_registry.yaml"
 
     # 集合与文件路径

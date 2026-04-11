@@ -76,7 +76,127 @@ uvicorn webapp.main:app --host 0.0.0.0 --port 8000 --reload
 - `POST /api/chat/stream`：流式对话接口
 - `GET /files?path=...`：工作区文件透传，仅允许访问仓库内文件
 
+## 性能评估系统
+
+KB Assistant V3 集成了基于 RAGAS 框架的完整性能评估系统，支持使用公开测试集对系统进行标准化评估。
+
+### 核心特性
+
+- **公开测试集支持**：中文（CRUD-RAG、SuperCLUE-RAG）、英文（HotpotQA、NQ）
+- **完整评估指标**：覆盖检索、生成、端到端三阶段
+- **批量评估**：支持大规模自动化评估
+- **多格式报告**：JSON、CSV导出，异常样本标注
+- **配置驱动**：通过配置文件灵活调整参数
+
+### 评估指标
+
+#### 检索阶段
+- `recall@k`：上下文召回率
+- `precision@k`：上下文精度
+- `mrr@k`：平均倒数排名
+
+#### 生成阶段
+- `faithfulness`：忠实度（检测幻觉）
+- `answer_relevancy`：答案相关性
+- `answer_coverage`：答案覆盖率
+
+#### 端到端阶段
+- `answer_correctness`：答案正确性
+- `answer_similarity`：答案相似度
+- `coverage@k`：上下文覆盖率
+
+### 快速开始
+
+#### 1. 测试安装
+
+```bash
+python scripts/eval/test_installation.py
+```
+
+#### 2. 评估中文CRUD-RAG测试集（100条样本）
+
+```bash
+python scripts/eval/run_benchmark.py \
+  --dataset crud_rag \
+  --subset-size 100 \
+  --output runtime/eval/crud_rag_eval.json
+```
+
+#### 3. 评估英文HotpotQA测试集（50条样本）
+
+```bash
+python scripts/eval/run_benchmark.py \
+  --dataset hotpotqa \
+  --subset-size 50 \
+  --language en \
+  --output runtime/eval/hotpotqa_eval.json
+```
+
+#### 4. 使用配置文件
+
+```bash
+python scripts/eval/run_benchmark.py \
+  --config configs/eval_config.yaml
+```
+
+### 生成CSV报告
+
+```bash
+# 从JSON报告生成CSV
+python -c "
+from core.evaluation.report_generator import convert_json_to_csv
+from pathlib import Path
+convert_json_to_csv(Path('runtime/eval/crud_rag_eval.json'))
+"
+```
+
+### 评估结果分析
+
+评估完成后，报告包含以下内容：
+
+- **整体摘要**：样本数量、成功率、平均延迟
+- **指标统计**：各指标的均值、标准差、最小值、最大值
+- **样本详情**：每个样本的问题、答案、ground_truth、各项指标分数
+- **异常样本**：低于阈值（默认0.5）的样本自动标注
+- **性能统计**：检索延迟、生成延迟分布
+
+### 配置文件说明
+
+评估系统支持通过 `configs/eval_config.yaml` 进行配置：
+
+```yaml
+# 数据集配置
+dataset:
+  name: "crud_rag"          # 测试集名称
+  subset_size: 100          # 样本数量
+  language: "zh"            # 语言
+
+# 检索配置
+retrieval:
+  search_mode: "hybrid"     # 检索模式
+  top_k: 10                 # 检索数量
+
+# 评估配置
+evaluation:
+  batch_size: 5             # 批处理大小
+  anomaly_threshold: 0.5    # 异常阈值
+```
+
+完整配置示例见 `configs/eval_config.yaml`。
+
+### 常见问题
+
+**Q: 如何选择测试集？**
+A: 中文知识库推荐CRUD-RAG（100条），英文推荐HotpotQA（50条）。初次评估建议从50-100条开始。
+
+**Q: 评估需要多长时间？**
+A: 100条样本，hybrid模式，约需10-20分钟。只评估检索阶段会快很多（3-5分钟）。
+
+**Q: 如何解读评估结果？**
+A: 重点关注：faithfulness（>0.8）、recall@k（>0.7）、answer_correctness（>0.7）。查看异常样本报告，分析低分原因。
+
 ## 说明
 
 - `app/streamlit_app.py` 保留在仓库中作为旧实现参考，但新的启动入口是 `webapp.main:app`。
 - 若 Neo4j 不可用，检索会退化；若图像模型不可用，多模态效果会下降。
+- 评估系统使用 RAGAS 0.2.10 和 datasets 库，确保 `requirements.txt` 已安装。

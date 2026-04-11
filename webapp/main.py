@@ -14,6 +14,7 @@ from fastapi.responses import FileResponse, HTMLResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
+from core.evaluation.recorder import EvaluationRecorder
 from core.types import RetrieverRequest, RetrieverResult, SearchMode
 from webapp.bootstrap import get_logger, get_pipeline, get_settings
 
@@ -25,6 +26,9 @@ UPLOAD_DIR = ROOT_DIR / "runtime" / "uploads"
 app = FastAPI(title="KB Assistant", version="3.0.0")
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
+
+# 初始化评估记录仪
+recorder = EvaluationRecorder(log_dir=ROOT_DIR / "runtime" / "eval")
 
 MODE_OPTIONS = [
     {
@@ -257,10 +261,26 @@ async def chat_stream(
             yield _sse("error", {"message": str(exc)})
             return
 
+        answer = "".join(answer_parts)
+
+        # 记录评估数据（异步，不影响响应）
+        try:
+            recorder.record(
+                query=query,
+                rewritten_query=rewritten_query,
+                retrieval_result=retrieval_result,
+                answer=answer,
+                search_mode=search_mode.value,
+                image_inputs=image_inputs,
+            )
+        except Exception as e:
+            # 评估记录失败不影响主流程
+            logger.debug(f"Evaluation recording failed: {e}")
+
         yield _sse(
             "done",
             {
-                "answer": "".join(answer_parts),
+                "answer": answer,
                 "retrieval": _serialize_result(retrieval_result),
                 "rewritten_query": rewritten_query,
             },

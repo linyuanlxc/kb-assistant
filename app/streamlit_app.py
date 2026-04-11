@@ -143,7 +143,14 @@ def _bootstrap_pipeline() -> RAGPipeline:
         settings=settings, registry=registry,
         vector_store=vector_store, bm25=bm25, graph_engine=graph_engine,
     )
-    return RAGPipeline(settings=settings, orchestrator=orchestrator, registry=registry)
+
+    reranker = None
+    if settings.rerank_enabled:
+        reranker_cfg = registry._cfg.get("reranker", {})
+        if reranker_cfg.get("enabled", False):
+            reranker = build_reranker(reranker_cfg)
+
+    return RAGPipeline(settings=settings, orchestrator=orchestrator, registry=registry, reranker=reranker)
 
 
 def _uploaded_file_storage_path(uploaded: BinaryIO) -> Path:

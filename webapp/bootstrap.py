@@ -32,9 +32,17 @@ def get_pipeline() -> "RAGPipeline":
     from core.orchestration.pipeline import RAGPipeline, RetrievalOrchestrator
     from core.providers.model_provider import ModelRegistry
     from core.retrieval.graph_retriever import LightRAGGraphEngine
+    from core.retrieval.reranker import build_reranker
 
     settings = get_settings()
     registry = ModelRegistry(settings.model_registry_path)
+
+    reranker = None
+    if settings.rerank_enabled:
+        reranker_cfg = registry._cfg.get("reranker", {})
+        if reranker_cfg.get("enabled", False):
+            reranker = build_reranker(reranker_cfg)
+
     vector_store = QdrantVectorStoreAdapter(
         url=settings.qdrant_url,
         api_key=settings.qdrant_api_key,
@@ -58,4 +66,4 @@ def get_pipeline() -> "RAGPipeline":
         bm25=bm25,
         graph_engine=graph_engine,
     )
-    return RAGPipeline(settings=settings, orchestrator=orchestrator, registry=registry)
+    return RAGPipeline(settings=settings, orchestrator=orchestrator, registry=registry, reranker=reranker)

@@ -3,14 +3,15 @@
 职责：
 1. 协调多路检索（Dense/BM25/Graph/Image）。
 2. 执行融合排序与调试信息输出。
-3. 构建上下文并调用大模型流式回答。
+3. 执行重排（Rerank），提升最终上下文精度。
+4. 构建上下文并调用大模型流式回答。
 """
 
 from __future__ import annotations
 
 import time
 from dataclasses import asdict
-from typing import Any
+from typing import Any, TYPE_CHECKING
 
 from core.config.settings import AppSettings
 from core.generation.prompting import build_answer_messages, build_context, build_rewrite_messages
@@ -20,6 +21,9 @@ from core.providers.model_provider import ModelRegistry
 from core.retrieval.fusion import normalize_weights, reciprocal_rank_fusion, weighted_merge
 from core.retrieval.graph_retriever import LightRAGGraphEngine
 from core.types import RetrieverRequest, RetrieverResult
+
+if TYPE_CHECKING:
+    from core.retrieval.reranker import BaseReranker
 
 
 class RetrievalOrchestrator:
@@ -45,20 +49,24 @@ class RetrievalOrchestrator:
         start = time.perf_counter()
         query_vec = self.embedder.embed_query(req.query)
 
+        # 为重排阶段多召回候选
+        rerank_budget = req.top_k * self.settings.rerank_top_k_multiplier if self.settings.rerank_enabled else req.top_k
+        fusion_top_k = max(rerank_budget, req.top_k)
+
         dense_items = self.vector_store.search(
             collection=self.settings.text_collection,
             vector=query_vec,
-            top_k=max(req.top_k * 3, 20),
+            top_k=max(fusion_top_k * 3, 20),
             filters=req.filters,
         )
-        bm25_items = self.bm25.search(req.query, top_k=max(req.top_k * 3, 20))
+        bm25_items = self.bm25.search(req.query, top_k=max(fusion_top_k * 3, 20))
 
         graph_items: list[Any] = []
         graph_evidence: list[dict[str, Any]] = []
         if self.graph_engine.health():
             graph_items, graph_evidence = self.graph_engine.search(
                 req.query,
-                top_k=max(req.top_k * 2, 12),
+                top_k=max(fusion_top_k * 2, 12),
             )
 
         image_items: list[Any] = []
@@ -68,7 +76,7 @@ class RetrievalOrchestrator:
                 image_items = self.vector_store.search(
                     collection=self.settings.image_collection,
                     vector=image_vectors[0],
-                    top_k=max(req.top_k * 2, 10),
+                    top_k=max(fusion_top_k * 2, 10),
                 )
         elif self.embedder.text_provider == "clip":
             # CLIP 共享向量空间：以文搜图
@@ -76,7 +84,7 @@ class RetrievalOrchestrator:
             image_items = self.vector_store.search(
                 collection=self.settings.image_collection,
                 vector=text_vec_for_image,
-                top_k=max(req.top_k * 2, 10),
+                top_k=max(fusion_top_k * 2, 10),
             )
 
         # 第一层：按业务权重融合。
@@ -87,7 +95,7 @@ class RetrievalOrchestrator:
             graph_items,
             image_items,
             weights,
-            req.top_k,
+            fusion_top_k,
         )
 
         # 第二层：使用 RRF 进行名次补偿。
@@ -121,9 +129,16 @@ class RetrievalOrchestrator:
 class RAGPipeline:
     """端到端问答流水线。"""
 
-    def __init__(self, settings: AppSettings, orchestrator: RetrievalOrchestrator, registry: ModelRegistry):
+    def __init__(
+        self,
+        settings: AppSettings,
+        orchestrator: RetrievalOrchestrator,
+        registry: ModelRegistry,
+        reranker: BaseReranker | None = None,
+    ):
         self.settings = settings
         self.orchestrator = orchestrator
+        self.reranker = reranker
         self.fast_model = registry.build_chat("fast_model")
         self.quality_model = registry.build_chat("quality_model")
 
@@ -149,6 +164,23 @@ class RAGPipeline:
             debug=req.debug,
         )
         retrieval_result = self.orchestrator.retrieve(retrieval_req)
+
+        # 第三层：重排阶段
+        rerank_latency_ms = 0.0
+        if self.reranker and self.settings.rerank_enabled and retrieval_result.items:
+            rerank_start = time.perf_counter()
+            reranked = self.reranker.rerank(rewritten_query, list(retrieval_result.items), top_k=req.top_k)
+            rerank_latency_ms = round((time.perf_counter() - rerank_start) * 1000, 2)
+
+            rerank_scores = {item.item_id: item.score for item in reranked}
+            if req.debug:
+                retrieval_result.debug_info["rerank_top"] = [asdict(item) for item in reranked[:5]]
+                retrieval_result.debug_info["rerank_scores"] = rerank_scores
+                retrieval_result.debug_info["rerank_latency_ms"] = rerank_latency_ms
+
+            retrieval_result.items = reranked
+            retrieval_result.scores = rerank_scores
+            retrieval_result.latency_ms += rerank_latency_ms
 
         context = build_context([asdict(item) for item in retrieval_result.items])
         messages = build_answer_messages(req.query, context, req.chat_history)

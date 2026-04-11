@@ -1,0 +1,265 @@
+# RAGAS评估配置文件
+# 该配置文件定义了评估系统的参数和行为
+
+# 数据集配置
+dataset:
+  # 测试集名称（支持：crud_rag, superclue_rag, hotpotqa, nq）
+  name: "crud_rag"
+
+  # 评估样本数量（null表示使用全部样本）
+  subset_size: 100
+
+  # 语言（zh: 中文, en: 英文）
+  language: "zh"
+
+  # Hugging Face缓存目录（null表示使用默认缓存）
+  cache_dir: null
+
+# 检索配置
+retrieval:
+  # 检索模式（hybrid, text_only, multimodal, graph_first）
+  search_mode: "hybrid"
+
+  # 检索top_k结果hybrid
+  top_k: 20
+
+  # 是否只评估检索阶段（不生成答案）
+  retrieval_only: false
+
+# 评估配置
+evaluation:
+  # 批处理大小（根据GPU内存调整）
+  batch_size: 5
+
+  # 异常检测阈值（低于此分数视为异常）
+  anomaly_threshold: 0.5
+
+  # 重点监控的指标
+  key_metrics:
+    - "faithfulness"  # 忠实度（检测幻觉）
+    - "answer_correctness"  # 答案正确性
+    - "answer_similarity"  # 答案相似度
+    - "recall@k"  # 上下文召回率
+
+# 输出配置
+output:
+  # 输出目录
+  dir: "runtime/eval"
+
+  # 报告文件名（不含扩展名，会自动添加时间戳）
+  filename: "benchmark_eval"
+
+  # 是否包含上下文文本（会增加文件大小）
+  include_contexts: false
+
+  # 导出格式（支持：json, csv, all）
+  formats:
+    - "json"
+    - "csv"
+
+  # 是否生成异常样本报告
+  generate_anomaly_report: true
+
+  # 是否生成分位数统计
+  generate_quantile_stats: true
+
+# 性能配置
+performance:
+  # 超时时间（秒）
+  timeout_seconds: 300
+
+  # 重试次数
+  max_retries: 3
+
+  # 重试延迟（秒）
+  retry_delay_seconds: 1
+
+# 日志配置
+logging:
+  # 日志级别（DEBUG, INFO, WARNING, ERROR）
+  level: "INFO"
+
+  # 是否打印进度条
+  show_progress: true
+
+  # 是否保存详细日志
+  save_detailed_logs: false
+
+# 中文测试集推荐配置
+zh_datasets:
+  crud_rag:
+    description: "CRUD-RAG中文测试集，涵盖创建、阅读、更新、删除四类任务"
+    recommended_subset_size: 100
+    key_features:
+      - "多样化的任务类型"
+      - "中文真实场景"
+      - "标注完善"
+
+  superclue_rag:
+    description: "SuperCLUE-RAG中文测试集，专注于RAG系统评估"
+    recommended_subset_size: 50
+    key_features:
+      - "专业领域问题"
+      - "高质量标注"
+      - "难度适中"
+
+# 英文测试集推荐配置
+en_datasets:
+  hotpotqa:
+    description: "HotpotQA多跳问答数据集"
+    recommended_subset_size: 50
+    key_features:
+      - "多跳推理"
+      - "复杂问题"
+      - "大规模数据"
+    notes: "需要较强推理能力，建议从50条开始"
+
+  nq:
+    description: "Natural Questions真实用户查询数据集"
+    recommended_subset_size: 100
+    key_features:
+      - "真实用户查询"
+      - "维基百科数据源"
+      - "多样化问题"
+    notes: "数据量较大，建议筛选后使用"
+
+# 指标说明
+metrics_documentation:
+  # 检索阶段指标
+  recall@k:
+    name: "上下文召回率"
+    description: "衡量检索到的上下文包含标准答案相关信息的能力"
+    range: "0-1"
+    interpretation:
+      high: ">0.7: 检索效果好，上下文覆盖了答案关键信息"
+      medium: "0.4-0.7: 检索效果一般，部分上下文有用"
+      low: "<0.4: 检索效果差，需要优化检索策略"
+
+  precision@k:
+    name: "上下文精度"
+    description: "衡量检索到的上下文中相关上下文的比例"
+    range: "0-1"
+    interpretation:
+      high: ">0.7: 精度高，上下文都很相关"
+      medium: "0.4-0.7: 精度中等，存在部分不相关上下文"
+      low: "<0.4: 精度低，大量不相关上下文"
+
+  mrr@k:
+    name: "平均倒数排名"
+    description: "衡量第一个相关文档的排名位置"
+    range: "0-1"
+    interpretation:
+      high: ">0.7: 相关文档通常排在前面"
+      low: "<0.3: 相关文档排名靠后"
+
+  # 生成阶段指标
+  faithfulness:
+    name: "忠实度"
+    description: "检测答案是否基于检索上下文生成（检测幻觉）"
+    range: "0-1"
+    interpretation:
+      high: ">0.8: 忠实度高，答案基于事实"
+      medium: "0.6-0.8: 可能存在轻微幻觉"
+      low: "<0.6: 存在明显幻觉，答案不可信"
+
+  answer_relevancy:
+    name: "答案相关性"
+    description: "衡量答案与问题的相关程度"
+    range: "0-1"
+    interpretation:
+      high: ">0.7: 答案高度相关"
+      low: "<0.4: 答案偏离主题"
+
+  answer_coverage:
+    name: "答案覆盖率"
+    description: "衡量答案覆盖标准答案信息的程度"
+    range: "0-1"
+    interpretation:
+      high: ">0.7: 答案信息完整"
+      medium: "0.4-0.7: 答案部分完整"
+      low: "<0.4: 答案信息缺失"
+
+  # 端到端指标
+  answer_correctness:
+    name: "答案正确性"
+    description: "综合评估答案的正确性（需要ground_truth）"
+    range: "0-1"
+    interpretation:
+      high: ">0.7: 答案正确"
+      medium: "0.4-0.7: 答案部分正确"
+      low: "<0.4: 答案错误"
+
+  answer_similarity:
+    name: "答案相似度"
+    description: "衡量生成答案与标准答案的语义相似度"
+    range: "0-1"
+    interpretation:
+      high: ">0.7: 与标准答案高度相似"
+      low: "<0.4: 与标准答案差异较大"
+
+  coverage@k:
+    name: "上下文覆盖率"
+    description: "评估检索内容实际利用率，避免冗余"
+    range: "0-1"
+    interpretation:
+      high: ">0.7: 上下文利用率高，信息有效"
+      low: "<0.4: 上下文利用率低，存在冗余"
+
+# 使用示例
+examples:
+  # 快速评估中文CRUD-RAG（100条样本）
+  quick_zh: |
+    python scripts/eval/run_benchmark.py \
+      --dataset crud_rag \
+      --subset-size 100 \
+      --output runtime/eval/crud_rag_eval.json
+
+  # 评估英文HotpotQA（50条样本，只检索）
+  quick_en: |
+    python scripts/eval/run_benchmark.py \
+      --dataset hotpotqa \
+      --subset-size 50 \
+      --language en \
+      --retrieval-only \
+      --output runtime/eval/hotpotqa_retrieval.json
+
+  # 使用配置文件
+  with_config: |
+    python scripts/eval/run_benchmark.py \
+      --config configs/eval_config.yaml
+
+  # 生成CSV报告
+  generate_csv: |
+    python scripts/eval/generate_csv_report.py \
+      --report runtime/eval/benchmark_*.json \
+      --output runtime/eval/benchmark_*.csv
+
+# 常见问题
+faq:
+  q1:
+    question: "如何选择测试集？"
+    answer: |
+      中文知识库推荐CRUD-RAG（100条）或SuperCLUE-RAG（50条）。
+      英文知识库推荐HotpotQA（50条）或NQ（100条）。
+      初次评估建议从50-100条开始，验证系统稳定性后再扩大规模。
+
+  q2:
+    question: "评估需要多长时间？"
+    answer: |
+      主要取决于样本数量和模型速度。
+      参考：100条样本，hybrid模式，约需10-20分钟。
+      只评估检索阶段会快很多（约3-5分钟）。
+
+  q3:
+    question: "如何解读评估结果？"
+    answer: |
+      重点关注：faithfulness（>0.8）、recall@k（>0.7）、answer_correctness（>0.7）。
+      查看异常样本报告，分析低分原因。
+      对比不同search_mode的性能差异。
+
+  q4:
+    question: "如何处理评估失败？"
+    answer: |
+      检查错误日志，常见原因：网络超时、模型不可用、数据格式错误。
+      降低batch_size，增加超时时间。
+      使用--retrieval-only参数排查是检索还是生成阶段的问题。
