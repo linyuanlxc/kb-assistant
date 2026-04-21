@@ -1,4 +1,4 @@
-﻿# KB Assistant V3 接口契约
+﻿# LabKB 接口契约
 
 ## 数据契约
 

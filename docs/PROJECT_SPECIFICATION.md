@@ -1,10 +1,10 @@
-# KB Assistant V3 项目说明书
+# LabKB 项目说明书
 
 ## 一、项目概述
 
 ### 1.1 项目背景
 
-KB Assistant V3 是一个可部署的**个人知识库智能问答系统**，基于 RAG（Retrieval-Augmented Generation，检索增强生成）架构构建。该系统通过整合多种检索手段（向量检索、BM25 关键词检索、知识图谱检索、多模态图像检索），为用户提供精准、可靠的知识问答服务。系统支持文本与图片的统一入库、SSE 流式回答、图片随问随传、调试信息面板等高级功能，并集成了基于 RAGAS 框架的完整性能评估系统。
+LabKB 是一个可部署的**实验室知识库智能问答系统**，基于 RAG（Retrieval-Augmented Generation，检索增强生成）架构构建。该系统通过整合多种检索手段（向量检索、BM25 关键词检索、知识图谱检索、多模态图像检索），为实验室成员提供精准、可靠的知识问答服务。系统支持文本与图片的统一入库、SSE 流式回答、图片随问随传、调试信息面板等高级功能，并集成了基于 RAGAS 框架的完整性能评估系统。
 
 ### 1.2 核心目标
 
@@ -27,9 +27,7 @@ KB Assistant V3 是一个可部署的**个人知识库智能问答系统**，基
 | 评估框架 | RAGAS 0.2.10 + datasets |
 | 文档处理 | LangChain + unstructured + PyMuPDF |
 | 文本分词 | jieba |
-| 旧版 UI（保留） | Streamlit |
 
----
 
 ## 二、整体架构设计
 
@@ -117,7 +115,6 @@ kb-assistant/
 │   ├── model_cache/          # 本地模型缓存
 │   ├── logs/                 # 日志文件
 │   └── eval/                 # 评估输出
-├── app/                      # 旧版 Streamlit 应用（保留参考）
 └── docs/                     # 开发文档
 ```
 
@@ -918,7 +915,7 @@ def build_rewrite_messages(query, chat_history):
 def build_answer_messages(query, context, chat_history):
     history = "\n".join([f"{role}: {text}" for role, text in chat_history[-8:]])
     return [
-        {"role": "system", "content": "你是个人知识库助手。必须优先依据给定上下文回答；若证据不足明确说不知道；给出简洁回答并附来源。"},
+        {"role": "system", "content": "你是实验室知识库助手 LabKB。必须优先依据给定上下文回答；若证据不足明确说不知道；给出简洁回答并附来源。"},
         {"role": "user", "content": f"历史对话:\n{history}\n\n上下文:\n{context}\n\n问题:\n{query}\n\n请作答。"},
     ]
 ```
@@ -959,7 +956,7 @@ def build_context(items: list[dict], max_chars: int = 9000) -> str:
 **应用初始化**：
 
 ```python
-app = FastAPI(title="KB Assistant", version="3.0.0")
+app = FastAPI(title="LabKB", version="3.0.0")
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 recorder = EvaluationRecorder(log_dir=ROOT_DIR / "runtime" / "eval")  # 评估数据采集器
@@ -1024,7 +1021,7 @@ event: token
 data: {"delta": " Assistant"}
 
 event: done
-data: {"answer": "KB Assistant 是一个...", "retrieval": {...}}
+data: {"answer": "LabKB 是一个...", "retrieval": {...}}
 ```
 
 **响应头设置**：
@@ -1188,7 +1185,7 @@ with trace_span(logger, "retrieval") as trace_id:
 
 ### 3.11 性能评估系统 — `core/evaluation/`
 
-评估系统是 KB Assistant V3 的重要能力模块，提供从数据采集到自动化评估再到报告生成的完整链路。
+评估系统是 LabKB 的重要能力模块，提供从数据采集到自动化评估再到报告生成的完整链路。
 
 #### 3.11.1 架构概览
 

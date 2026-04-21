@@ -96,7 +96,7 @@ embeddings:
 # model:     当 provider=cross-encoder 时，使用的模型名称
 # ============================================================
 reranker:
-  enabled: true
+  enabled: false
   provider: llm
   model_key: fast_model
   # --- Cross-Encoder 方案（取消注释并注释上方 llm 配置即可切换）---

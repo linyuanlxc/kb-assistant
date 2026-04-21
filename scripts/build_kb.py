@@ -20,7 +20,7 @@ from core.indexing.builder import IndexBuilder
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="构建 KB Assistant V2 的向量 / BM25 / 图索引")
+    parser = argparse.ArgumentParser(description="构建 LabKB 的向量 / BM25 / 图索引")
     parser.add_argument("--full", action="store_true", help="执行全量重建，而不是增量更新")
     return parser.parse_args()
 

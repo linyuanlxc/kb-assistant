@@ -259,12 +259,12 @@ async function refreshHealth() {
       .join("")
 
     if (payload.ready) {
-      refs.headerStatus.textContent = "KB Assistant"
+      refs.headerStatus.textContent = "LabKB"
     } else {
-      refs.headerStatus.textContent = "KB Assistant — 部分服务不可用"
+      refs.headerStatus.textContent = "LabKB — 部分服务不可用"
     }
   } catch (_) {
-    refs.headerStatus.textContent = "KB Assistant — 健康检查失败"
+    refs.headerStatus.textContent = "LabKB — 健康检查失败"
   }
 }
 

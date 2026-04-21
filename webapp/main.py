@@ -1,4 +1,4 @@
-﻿"""FastAPI application entrypoint for KB Assistant."""
+﻿"""FastAPI application entrypoint for LabKB."""
 
 from __future__ import annotations
 
@@ -23,7 +23,7 @@ TEMPLATES_DIR = ROOT_DIR / "webapp" / "templates"
 STATIC_DIR = ROOT_DIR / "webapp" / "static"
 UPLOAD_DIR = ROOT_DIR / "runtime" / "uploads"
 
-app = FastAPI(title="KB Assistant", version="3.0.0")
+app = FastAPI(title="LabKB", version="3.0.0")
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 

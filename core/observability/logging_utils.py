@@ -40,7 +40,7 @@ class JsonFormatter(logging.Formatter):
 
 def setup_logging(level: int = logging.INFO) -> logging.Logger:
     """初始化统一 logger（重复调用时复用已存在 handler）。"""
-    logger = logging.getLogger("kb_assistant_v2")
+    logger = logging.getLogger("lab_kb")
     logger.setLevel(level)
     if logger.handlers:
         return logger

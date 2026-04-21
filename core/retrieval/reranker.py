@@ -120,8 +120,18 @@ class CrossEncoderReranker(BaseReranker):
         if self._model is None:
             from sentence_transformers import CrossEncoder
 
-            self._model = CrossEncoder(self.model_name, max_length=self.max_length)
+            cache_folder = self._cache_dir()
+            self._model = CrossEncoder(
+                self.model_name, max_length=self.max_length, cache_folder=cache_folder,
+            )
         return self._model
+
+    @staticmethod
+    def _cache_dir() -> str:
+        """返回项目统一的模型缓存目录。"""
+        from core.config.settings import load_settings
+        settings = load_settings()
+        return str(settings.model_cache_dir)
 
     def rerank(
         self,

@@ -1,4 +1,4 @@
-# KB Assistant V3 — 面试八股问答
+# LabKB — 面试八股问答
 
 > 基于项目实际实现编写，涵盖系统架构、核心设计、工程细节与评估体系。
 
@@ -32,7 +32,7 @@
 
 ## 项目背景
 
-个人开发的知识库智能问答系统 KB Assistant V3，基于 RAG（Retrieval-Augmented Generation）架构，整合 Dense 向量检索、BM25 关键词检索、知识图谱检索、CLIP 多模态图像检索四路召回，支持文本与图片统一入库、SSE 流式回答、多轮对话查询改写、调试信息面板，并集成了基于 RAGAS 框架的完整性能评估系统。技术栈为 FastAPI + Qdrant + Neo4j + LangChain + 智谱AI GLM-4。
+实验室开发的知识库智能问答系统 LabKB，基于 RAG（Retrieval-Augmented Generation）架构，整合 Dense 向量检索、BM25 关键词检索、知识图谱检索、CLIP 多模态图像检索四路召回，支持文本与图片统一入库、SSE 流式回答、多轮对话查询改写、调试信息面板，并集成了基于 RAGAS 框架的完整性能评估系统。技术栈为 FastAPI + Qdrant + Neo4j + LangChain + 智谱AI GLM-4。
 
 ---
 
@@ -46,7 +46,7 @@
 
 四路召回分别从不同维度弥补单一检索方式的缺陷，实现互补式检索。具体而言：
 
-- **Dense 向量检索**：基于智谱 embedding-3 API 生成 1024 维文本向量，通过 Qdrant 的余弦相似度搜索完成检索。解决的是深层语义匹配问题——当用户查询与文档存在同义表述或语义关联但字面不同时（如"个人知识库"与"私有文档管理系统"），Dense 能捕捉这种上下文语义关系，克服关键词字面匹配的局限。代码中 Dense 召回 `top_k * 3` 条候选，保证召回覆盖面。
+- **Dense 向量检索**：基于智谱 embedding-3 API 生成 1024 维文本向量，通过 Qdrant 的余弦相似度搜索完成检索。解决的是深层语义匹配问题——当用户查询与文档存在同义表述或语义关联但字面不同时（如"实验室知识库"与"私有文档管理系统"），Dense 能捕捉这种上下文语义关系，克服关键词字面匹配的局限。代码中 Dense 召回 `top_k * 3` 条候选，保证召回覆盖面。
 
 - **BM25 稀疏检索**：基于 `rank_bm25` 的 BM25Okapi 算法，对文本子块做空格分词后构建倒排索引，持久化为 `bm25_index.json`。解决的是精确关键词匹配问题——对实体名、术语、缩写等明确词汇（如"Neo4j"、"CLIP"），BM25 能做到高效精准匹配，弥补向量检索在字面精度上的短板。
 
@@ -269,7 +269,7 @@ async def event_stream():
 
 **回答**：
 
-V1/V2 使用 Streamlit（`app/streamlit_app.py`），V3 迁移到 FastAPI（`webapp/main.py`），核心原因：
+V1/V2 使用 Streamlit，V3 已迁移到 FastAPI（`webapp/main.py`），旧版代码已移除。核心迁移原因：
 
 1. **SSE 支持**：Streamlit 的 `st.write_stream` 在流式输出和自定义事件协议上不够灵活，FastAPI 的 `StreamingResponse` 原生支持 SSE，能精确控制事件格式。
 
@@ -281,7 +281,7 @@ V1/V2 使用 Streamlit（`app/streamlit_app.py`），V3 迁移到 FastAPI（`web
 
 5. **依赖注入**：通过 `bootstrap.py` 的 `@lru_cache` 实现单例 Pipeline 缓存，启动时一次性初始化所有依赖。
 
-旧版 Streamlit 代码保留在 `app/` 目录中作为参考。
+旧版 Streamlit 代码已移除。
 
 ---
 

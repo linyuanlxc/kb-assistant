@@ -33,6 +33,10 @@ PATH_KEYS = {
 class AppSettings:
     """应用配置对象（索引与服务阶段共用）。"""
 
+    # HuggingFace 镜像（国内环境加速下载）
+    hf_endpoint: str = os.getenv("HF_ENDPOINT", "https://hf-mirror.com")
+    hf_offline: bool = os.getenv("HF_HUB_OFFLINE", "0").lower() in ("1", "true")
+
     source_dir: Path = ROOT_DIR / "kb_source"
     index_dir: Path = ROOT_DIR / "data_base"
     runtime_dir: Path = ROOT_DIR / "runtime"
@@ -106,4 +110,14 @@ def load_settings() -> AppSettings:
     settings.runtime_dir.mkdir(parents=True, exist_ok=True)
     settings.model_cache_dir.mkdir(parents=True, exist_ok=True)
     settings.log_dir.mkdir(parents=True, exist_ok=True)
+
+    # 设置 HuggingFace 镜像（影响所有 SentenceTransformer / Transformers 模型下载）
+    if settings.hf_endpoint:
+        os.environ.setdefault("HF_ENDPOINT", settings.hf_endpoint)
+    # 离线模式：跳过联网验证，直接使用本地缓存
+    if settings.hf_offline:
+        os.environ.setdefault("HF_HUB_OFFLINE", "1")
+        os.environ.setdefault("TRANSFORMERS_OFFLINE", "1")
+        os.environ.setdefault("SENTENCE_TRANSFORMERS_OFFLINE", "1")
+
     return settings

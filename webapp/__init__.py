@@ -1,1 +1,1 @@
-"""FastAPI web application package for KB Assistant."""
+"""FastAPI web application package for LabKB."""

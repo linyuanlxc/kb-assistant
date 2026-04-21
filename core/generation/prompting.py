@@ -28,7 +28,7 @@ def build_answer_messages(query: str, context: str, chat_history: list[tuple[str
     return [
         {
             "role": "system",
-            "content": "你是个人知识库助手。必须优先依据给定上下文回答；若证据不足明确说不知道；给出简洁回答并附来源。",
+            "content": "你是实验室知识库助手 LabKB。必须优先依据给定上下文回答；若证据不足明确说不知道；给出简洁回答并附来源。",
         },
         {
             "role": "user",

@@ -1,8 +1,8 @@
-﻿# KB Assistant V2 实施与运行说明
+﻿# LabKB V2 实施与运行说明
 
 ## 1. 项目结构
 
-- `app/streamlit_app.py`：前端入口与会话交互。
+- `webapp/main.py`：FastAPI 前端入口与 SSE 流式接口。
 - `core/ingestion`：文档 / 图片加载与父子分块。
 - `core/indexing`：Qdrant、BM25、manifest 和索引构建器。
 - `core/retrieval`：GraphRAG（Neo4j）与融合检索。
@@ -25,7 +25,7 @@
 ```bash
 pip install -r requirements.txt
 python scripts/build_kb.py --full
-streamlit run app/streamlit_app.py
+uvicorn webapp.main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
 ## 4. 索引说明

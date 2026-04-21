@@ -1,8 +1,8 @@
-# 个人知识库助手升级设计文档
+# LabKB 升级设计文档
 
 ## 1. 文档目标
 
-本文档用于指导当前 `kb-assistant` 项目从“可用 Demo”升级为“可部署上线、功能齐全、体验良好”的个人知识库助手。  
+本文档用于指导当前项目从"可用 Demo"升级为"可部署上线、功能齐全、体验良好"的实验室知识库系统。  
 文档重点覆盖：
 
 - 数据准备链路
@@ -15,8 +15,8 @@
 
 当前项目已具备：
 
-- Streamlit 前端对话界面
-- 基于 Chroma 的向量检索
+- FastAPI 前端对话界面（SSE 流式）
+- 基于 Qdrant 的向量检索
 - Qwen Embedding + Qwen Chat API 接入
 - 基础的问答链路和流式输出
 - 基础建库脚本（文档加载 + 切分 + 入库）
@@ -39,7 +39,7 @@
 3. `retrieval`（检索与重排）
 4. `generation`（Prompt、LLM、流式输出）
 5. `orchestration`（RAG 主流程编排）
-6. `interfaces`（Streamlit UI / API 服务）
+6. `interfaces`（FastAPI Web 服务）
 7. `observability`（日志、指标、调试追踪）
 
 建议目录（目标）：
@@ -330,8 +330,7 @@ RRF(d) = Σ 1 / (k + rank_i(d))
 统一配置来源优先级：
 
 1. 环境变量
-2. `.streamlit/secrets.toml`
-3. 默认配置文件 `core/config/default.yaml`
+2. 默认配置文件 `core/config/default.yaml`
 
 关键配置：
 
@@ -351,11 +350,11 @@ RRF(d) = Σ 1 / (k + rank_i(d))
 
 阶段一（快速上线）：
 
-- Streamlit + 本地 Chroma + 单进程服务
+- FastAPI + 本地 Qdrant + 单进程服务
 
 阶段二（可扩展）：
 
-- 前端（Streamlit/Web） + FastAPI RAG 服务
+- FastAPI Web 前端 + FastAPI RAG 服务
 - 异步索引 Worker（增量构建任务）
 - 向量库独立目录挂载
 
@@ -448,6 +447,6 @@ RRF(d) = Σ 1 / (k + rank_i(d))
 1. 先重构 `scripts/build_kb.py` 为可复用的 `core/ingestion` + `core/indexing`
 2. 新建 `core/retrieval` 实现 dense/sparse/hybrid/rrf
 3. 新建 `core/generation` 实现模型抽象、重写、Prompt Builder
-4. 最后接回 `app/streamlit_app.py`，只保留 UI 与调用编排
+4. 最后接入 `webapp/main.py`，只保留 UI 与调用编排
 
 以上顺序可以最小化回归风险，并确保每个阶段都能独立验证收益。
