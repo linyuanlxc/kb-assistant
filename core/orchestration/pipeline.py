@@ -59,6 +59,7 @@ class RetrievalOrchestrator:
             top_k=max(fusion_top_k * 3, 20),
             filters=req.filters,
         )
+
         bm25_items = self.bm25.search(req.query, top_k=max(fusion_top_k * 3, 20))
 
         graph_items: list[Any] = []
@@ -86,6 +87,26 @@ class RetrievalOrchestrator:
                 vector=text_vec_for_image,
                 top_k=max(fusion_top_k * 2, 10),
             )
+
+        # 回查父块完整文本，用于后续上下文注入
+        parent_ids_to_fetch: set[str] = set()
+        for item in dense_items:
+            pid = (item.metadata or {}).get("parent_id")
+            if pid:
+                parent_ids_to_fetch.add(pid)
+
+        parent_text_map: dict[str, str] = {}
+        if parent_ids_to_fetch:
+            parent_text_map = self.vector_store.search_by_ids(
+                self.settings.parent_collection, list(parent_ids_to_fetch)
+            )
+
+        # 将父块完整文本注入到所有检索结果的 metadata 中
+        for item_list in (dense_items, bm25_items, graph_items, image_items):
+            for item in item_list:
+                pid = (item.metadata or {}).get("parent_id")
+                if pid and pid in parent_text_map:
+                    item.metadata["parent_text"] = parent_text_map[pid]
 
         # 第一层：按业务权重融合。
         weights = normalize_weights(self.settings.retrieval_weights, use_image=bool(req.image_inputs) or self.embedder.text_provider == "clip")

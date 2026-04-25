@@ -123,16 +123,50 @@ class QdrantVectorStoreAdapter(VectorStoreAdapter):
         """将父级文本分块写入补充召回层。"""
         points: list[models.PointStruct] = []
         for (parent_id, text), vector in zip(parents.items(), vectors):
+            # Extract doc_id from parent_id (format: "{doc_id}:p:{index}")
+            doc_id = parent_id.rsplit(":p:", 1)[0] if ":p:" in parent_id else parent_id
             qdrant_id = self._to_qdrant_id(parent_id)
             points.append(
                 models.PointStruct(
                     id=qdrant_id,
                     vector=vector,
-                    payload={"content": text, "parent_id": parent_id, "source": "parent_doc"},
+                    payload={
+                        "content": text,
+                        "parent_id": parent_id,
+                        "doc_id": doc_id,
+                        "source": "parent_doc",
+                    },
                 )
             )
 
         self._upsert_in_batches(self.parent_collection, points)
+
+    def delete_text_chunks_by_doc_id(self, doc_id: str) -> None:
+        """按 doc_id 删除该文档的所有子块。"""
+        self.client.delete(
+            collection_name=self.text_collection,
+            points_selector=models.Filter(
+                must=[models.FieldCondition(key="doc_id", match=models.MatchValue(value=doc_id))]
+            ),
+        )
+
+    def delete_parent_docs_by_doc_id(self, doc_id: str) -> None:
+        """按 doc_id 删除该文档的所有父块。"""
+        self.client.delete(
+            collection_name=self.parent_collection,
+            points_selector=models.Filter(
+                must=[models.FieldCondition(key="doc_id", match=models.MatchValue(value=doc_id))]
+            ),
+        )
+
+    def delete_image_assets_by_doc_id(self, doc_id: str) -> None:
+        """按 doc_id 删除该文档的所有图片资产。"""
+        self.client.delete(
+            collection_name=self.image_collection,
+            points_selector=models.Filter(
+                must=[models.FieldCondition(key="doc_id", match=models.MatchValue(value=doc_id))]
+            ),
+        )
 
     def upsert_image_assets(self, image_records: list[dict[str, Any]], vectors: list[list[float]]) -> None:
         """将图片 embedding 和元数据写入集合。"""
@@ -143,6 +177,29 @@ class QdrantVectorStoreAdapter(VectorStoreAdapter):
             points.append(models.PointStruct(id=qdrant_id, vector=vector, payload=payload))
 
         self._upsert_in_batches(self.image_collection, points)
+
+    def search_by_ids(self, collection: str, ids: list[str]) -> dict[str, str]:
+        """按业务 ID 列表精确查找，返回 {raw_id: content} 映射。
+
+        用于检索后回查父块完整文本。
+        """
+        if not ids:
+            return {}
+        qdrant_ids = [self._to_qdrant_id(rid) for rid in ids]
+        try:
+            points = self.client.retrieve(
+                collection_name=collection,
+                ids=qdrant_ids,
+                with_payload=True,
+                with_vectors=False,
+            )
+        except Exception:
+            return {}
+        return {
+            rid: (pt.payload or {}).get("content", "")
+            for rid, pt in zip(ids, points)
+            if pt
+        }
 
     def search(
         self,

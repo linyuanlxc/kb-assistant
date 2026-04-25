@@ -38,12 +38,17 @@ def build_answer_messages(query: str, context: str, chat_history: list[tuple[str
 
 
 def build_context(items: list[dict[str, Any]], max_chars: int = 9000) -> str:
-    """从召回结果中构造上下文窗口，并保留来源标记。"""
+    """从召回结果中构造上下文窗口，并保留来源标记。
+
+    优先使用父块完整文本（metadata.parent_text），降级使用子块文本（content）。
+    """
     chunks: list[str] = []
     total = 0
     for it in items:
-        # 按顺序拼接片段，超过字符上限后立即停止，避免上下文溢出。
-        piece = f"[source:{it.get('source','')}] {it.get('content','')}"
+        # 优先使用父块完整文本，降级使用子块文本
+        metadata = (it.get("metadata") or {})
+        text = metadata.get("parent_text") or it.get("content", "")
+        piece = f"[source:{it.get('source','')}] {text}"
         if total + len(piece) > max_chars:
             break
         chunks.append(piece)

@@ -35,6 +35,33 @@ class LightRAGGraphEngine:
         except Exception:
             return False
 
+    def delete_doc(self, doc_id: str) -> None:
+        """删除文档节点及其所有关系，并清理不再被引用的实体。"""
+        with self.driver.session() as session:
+            # 先获取该文档关联的所有实体
+            result = session.run(
+                "MATCH (d:Doc {id:$pid})-[:MENTIONS]->(e:Entity) RETURN e.name AS name",
+                pid=doc_id,
+            )
+            entity_names = [record["name"] for record in result]
+
+            # 删除文档节点及其所有关系
+            session.run(
+                "MATCH (d:Doc {id:$pid}) DETACH DELETE d",
+                pid=doc_id,
+            )
+
+            # 清理不再被任何文档引用的实体
+            for name in entity_names:
+                session.run(
+                    "MATCH (e:Entity {name:$name}) "
+                    "OPTIONAL MATCH (e)<-[:MENTIONS]-(d:Doc) "
+                    "WITH e, d "
+                    "WHERE d IS NULL "
+                    "DELETE e",
+                    name=name,
+                )
+
     @staticmethod
     def _extract_entities(text: str, topk: int = 8) -> list[str]:
         """从文本中提取类实体关键词。"""

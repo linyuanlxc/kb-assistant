@@ -11,10 +11,12 @@ from __future__ import annotations
 import hashlib
 from datetime import datetime
 from pathlib import Path
+from typing import Any
 from uuid import NAMESPACE_URL, uuid5
 
 from langchain_community.document_loaders import Docx2txtLoader, PyPDFLoader, TextLoader
 
+from core.ingestion.md_parser import parse_markdown, structured_to_text
 from core.types import RawDocument
 
 TEXT_SUFFIXES = {".md", ".markdown", ".txt", ".json", ".srt", ".vtt", ".tsv", ".html"}
@@ -53,10 +55,13 @@ def _load_text(path: Path) -> str:
     return ""
 
 
-def load_raw_documents(source_dir: Path) -> tuple[list[RawDocument], list[RawDocument]]:
-    """扫描目录并返回（文本文档列表，图片资产列表）。"""
+def load_raw_documents(
+    source_dir: Path,
+) -> tuple[list[RawDocument], list[RawDocument], dict[str, list[dict[str, Any]]]]:
+    """扫描目录并返回（文本文档列表，图片资产列表，结构化文档映射）。"""
     text_docs: list[RawDocument] = []
     image_docs: list[RawDocument] = []
+    structured_docs: dict[str, list[dict[str, Any]]] = {}
 
     for path in sorted(source_dir.rglob("*")):
         if not path.is_file():
@@ -71,6 +76,17 @@ def load_raw_documents(source_dir: Path) -> tuple[list[RawDocument], list[RawDoc
             content = _load_text(path)
             if not content.strip():
                 continue
+
+            # 对 .md 文件尝试结构化解析
+            if suffix == ".md":
+                try:
+                    structured = parse_markdown(path)
+                    if structured:
+                        structured_docs[doc_id] = structured
+                        # 用结构化展平文本作为 content，保留标题层级
+                        content = structured_to_text(structured)
+                except Exception:
+                    pass  # 解析失败，降级使用纯文本
 
             text_docs.append(
                 RawDocument(
@@ -104,4 +120,4 @@ def load_raw_documents(source_dir: Path) -> tuple[list[RawDocument], list[RawDoc
                 )
             )
 
-    return text_docs, image_docs
+    return text_docs, image_docs, structured_docs
